@@ -1,0 +1,7 @@
+---
+source: ft_lex_lib/src/tokenizer/mod.rs
+expression: result
+---
+Err:
+  kind: NoSeparatorsFound
+  position: ~

@@ -1,0 +1,9 @@
+---
+source: ft_lex_lib/src/tokenizer/mod.rs
+expression: result
+---
+Err:
+  kind: UnterminatedCodeBlock
+  position:
+    cur_line: 3
+    cur_pos: 9

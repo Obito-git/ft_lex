@@ -1,6 +1,4 @@
-[package]
-name = "ft_lex"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "2"
 
-[dependencies]
+members = ["ft_lex_lib", "ft_lex"]

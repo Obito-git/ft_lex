@@ -1,7 +1,7 @@
-use std::iter::Peekable;
-use std::str::Chars;
 #[cfg(test)]
 use serde::Serialize;
+use std::iter::Peekable;
+use std::str::Chars;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(test, derive(Serialize))]
@@ -94,7 +94,7 @@ impl<'a> Cursor<'a> {
     pub fn peek(&mut self) -> Option<&char> {
         self.data.peek()
     }
-    
+
     pub fn peek_two(&mut self) -> (Option<char>, Option<char>) {
         let mut it = self.data.clone();
         (it.next(), it.next())

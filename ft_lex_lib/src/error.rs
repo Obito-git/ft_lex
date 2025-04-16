@@ -10,6 +10,10 @@ pub enum LexErrorKind {
     UnterminatedCommentBlock,
     UnterminatedCodeBlock,
     UnterminatedString,
+    UnterminatedToken, // TODO change name?
+    UnexpectedEndOfInputAfterEscape,
+    UnmatchedBracket(char, char),
+    UnbalancedBrackets,
     UnexpectedCharacter(char),
     NoSeparatorsFound,
     Internal(String),

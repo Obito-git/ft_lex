@@ -78,34 +78,79 @@ impl<'a> LexFileTokenizer<'a> {
     //TODO: handle unclosed code block }
     fn read_pair(&mut self) -> Result<Pair, LexError> {
         let position = self.cursor.get_position();
-        let mut definition_name = Vec::with_capacity(4);
+        let mut key = Vec::with_capacity(4);
         //TODO: review carefully when parantesses
         //TODO: review carefully when [] ][ are escaped for regex
         //TODO: review escaped " inside ""
-        let mut regex_depth = 0;
-        let mut is_str_mode = false;
-        let mut prev_char = '0';
 
+        //TODO: test good {}
+        let mut delimiter_stack = Vec::with_capacity(8);
+        let start_position = self.cursor.get_position();
+
+        // It reads regex like expressions, but doesn't validate it. It is done on parsing level
         while let Some(&c) = self.cursor.peek() {
-            match (c, is_str_mode, regex_depth == 0) {
-                (']', false, _) => regex_depth += 1,
-                ('[', false, _) => regex_depth -= 1,
-                ('"', _, _) => {
-                    if prev_char != '\\' {
-                        is_str_mode = !is_str_mode
+            let current_delimiter = delimiter_stack.last().cloned();
+            match c {
+                '\\' => {
+                    self.cursor.next();
+                    key.push('\\');
+                    key.push(self.cursor.next().ok_or(LexError::new(
+                        LexErrorKind::UnexpectedEndOfInputAfterEscape,
+                        start_position,
+                    ))?);
+                }
+                _ if current_delimiter == Some('[') => {
+                    self.cursor.next();
+                    key.push(c);
+                    if c == ']' {
+                        delimiter_stack.pop();
                     }
                 }
-                ('\n' | ' ' | '\t', false, true) => break,
-                _ => {}
+                _ if current_delimiter == Some('(') => {
+                    self.cursor.next();
+                    key.push(c);
+                    if c == ')' {
+                        delimiter_stack.pop();
+                    }
+                }
+                _ if current_delimiter == Some('"') => {
+                    self.cursor.next();
+                    key.push(c);
+                    if c == '"' {
+                        delimiter_stack.pop();
+                    }
+                }
+                _ if current_delimiter == Some('{') => {
+                    self.cursor.next();
+                    key.push(c);
+                    if c == '}' {
+                        delimiter_stack.pop();
+                    }
+                }
+                '[' | '(' | '{' | '"' => {
+                    self.cursor.next();
+                    delimiter_stack.push(c);
+                    key.push(c);
+                }
+                '\n' | ' ' | '\t' if delimiter_stack.is_empty() => {
+                    break;
+                }
+                c => {
+                    self.cursor.next();
+                    key.push(c)
+                }
             }
-            self.cursor.next();
-            prev_char = c;
-            definition_name.push(c)
+        }
+
+        if !delimiter_stack.is_empty() {
+            return Err(LexError::new(
+                LexErrorKind::UnbalancedBrackets,
+                self.cursor.get_position(),
+            ));
         }
 
         self.cursor.skip_spaces_and_tabs();
 
-        //TODO: very naive handing, change
         let mut is_str_mode = false;
         let multiline_code_block = self.cursor.peek() == Some(&'{');
         let mut bracket_depth = 0;
@@ -113,9 +158,8 @@ impl<'a> LexFileTokenizer<'a> {
         let mut value = Vec::with_capacity(32);
 
         if multiline_code_block {
-            // Consume the opening '{' and start depth at 1
-            self.cursor.next(); // Consume '{'
-            value.push('{'); // Add '{' to the value
+            self.cursor.next();
+            value.push('{');
             bracket_depth = 1;
         }
 
@@ -133,15 +177,10 @@ impl<'a> LexFileTokenizer<'a> {
                 Some('\\') if is_str_mode => {
                     self.cursor.next();
                     value.push('\\');
-                    if let Some(escaped) = self.cursor.next() {
-                        value.push(escaped);
-                    } else {
-                        //TODO: test
-                        return Err(LexError::new(
-                            LexErrorKind::UnterminatedString,
-                            current_char_pos,
-                        ));
-                    }
+                    value.push(self.cursor.next().ok_or(LexError::new(
+                        LexErrorKind::UnexpectedEndOfInputAfterEscape,
+                        current_char_pos,
+                    ))?);
                 }
                 Some('{') if !is_str_mode && multiline_code_block => {
                     self.cursor.next();
@@ -169,22 +208,21 @@ impl<'a> LexFileTokenizer<'a> {
                     if multiline_code_block && bracket_depth != 0 {
                         return Err(LexError::new(
                             LexErrorKind::UnterminatedCodeBlock,
-                            val_start_pos, // Error started at the opening '{'
+                            val_start_pos,
                         ));
                     }
                     if is_str_mode {
                         return Err(LexError::new(
                             LexErrorKind::UnterminatedString,
-                            val_start_pos, // Or find the opening '"'? Harder.
+                            val_start_pos,
                         ));
                     }
-                    // EOF is fine if the block/line terminated correctly or was empty.
-                    break; // Exit loop, EOF reached
+                    break;
                 }
             }
         }
 
-        Ok((position, definition_name, value))
+        Ok((position, key, value))
     }
 
     fn read_multi_comment_block(&mut self) -> Result<(), LexError> {
@@ -255,7 +293,7 @@ impl<'a> LexFileTokenizer<'a> {
             self.cursor.skip_white_spaces();
             let cursor_is_on_line_start = self.cursor.is_on_line_beginning();
             let first_two = self.cursor.peek_two();
-            
+
             if self.cursor.is_eof() {
                 break;
             }

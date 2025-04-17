@@ -1,0 +1,5 @@
+%{
+    char *valid_string = "//";
+%}
+
+%%

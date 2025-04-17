@@ -1,0 +1,5 @@
+%{
+    //This is valid btw %}
+%}
+
+%%

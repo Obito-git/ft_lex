@@ -6,4 +6,4 @@ Err:
   kind: UnterminatedCodeBlock
   position:
     cur_line: 1
-    cur_pos: 2
+    cur_pos: 0

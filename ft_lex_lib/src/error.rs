@@ -14,7 +14,7 @@ pub enum LexErrorKind {
     UnexpectedEndOfInputAfterEscape,
     UnmatchedBracket(char, char),
     UnbalancedBrackets,
-    UnexpectedCharacter(char),
+    UnexpectedCharacter(char, char),
     NoSeparatorsFound,
     Internal(String),
 }

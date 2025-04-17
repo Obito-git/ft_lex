@@ -5,8 +5,10 @@ expression: result
 Ok:
   - CodeBlock:
       - cur_line: 1
-        cur_pos: 6
-      - - "\n"
+        cur_pos: 0
+      - - "{"
+        - "%"
+        - "\n"
         - " "
         - " "
         - " "
@@ -31,6 +33,8 @@ Ok:
         - "\""
         - ;
         - "\n"
+        - "%"
+        - "}"
   - PercentPercent:
       cur_line: 5
       cur_pos: 0

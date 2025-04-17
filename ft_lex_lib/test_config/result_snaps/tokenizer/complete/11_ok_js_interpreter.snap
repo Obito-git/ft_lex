@@ -80,8 +80,10 @@ Ok:
         - l
   - CodeBlock:
       - cur_line: 3
-        cur_pos: 2
-      - - "\n"
+        cur_pos: 0
+      - - "{"
+        - "%"
+        - "\n"
         - "#"
         - i
         - n
@@ -270,6 +272,8 @@ Ok:
         - "}"
         - "\n"
         - "\n"
+        - "%"
+        - "}"
   - Definition:
       - cur_line: 19
         cur_pos: 0

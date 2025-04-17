@@ -16,6 +16,11 @@ pub enum Token {
     MultilineComment(CursorPosition, Vec<char>),
 }
 
+enum CCodeBlockType {
+    Regular,
+    Lex,
+}
+
 pub struct LexFileTokenizer<'a> {
     cursor: Cursor<'a>,
     res: Vec<Token>,
@@ -48,36 +53,123 @@ impl<'a> LexFileTokenizer<'a> {
         }
     }
 
-    fn read_code_block(&mut self) -> Result<(), LexError> {
+    //TODO: handle \ in single quotes
+    //TODO: handle " and %} in comments
+    // TODO: change name? every other fn starts with read_ pushes token, but this one returns data
+    //TODO: test everything that I test in code block in definition section in the rules section
+    fn read_c_code_block(&mut self, block_type: CCodeBlockType) -> Result<Vec<char>, LexError> {
         let mut is_str_mode = false;
-        let mut buffer = Vec::with_capacity(16);
-        let pos = self.cursor.get_position();
+        let cursor_pos = self.cursor.get_position();
+        let mut res = Vec::with_capacity(32);
+        let mut bracket_depth = 1;
 
-        //TODO: handle escaped " with / inside string
-        loop {
-            if self.cursor.peek_two() == (Some('%'), Some('}')) && !is_str_mode {
+        match block_type {
+            CCodeBlockType::Regular => {
                 self.cursor.next();
-                self.cursor.next();
-                self.res.push(Token::CodeBlock(pos, buffer));
-                self.cursor.skip_spaces_and_tabs();
-                self.assert_next_is_newline()?;
-                break;
+                res.push('{');
             }
-            match self.cursor.next() {
-                Some('"') => {
-                    is_str_mode = !is_str_mode;
-                    buffer.push('"');
-                }
-                Some(c) => buffer.push(c),
-                None => return Err(LexError::new(LexErrorKind::UnterminatedCodeBlock, pos)),
+            CCodeBlockType::Lex => {
+                self.cursor.next();
+                self.cursor.next();
+                res.push('{');
+                res.push('%');
             }
         }
-        Ok(())
+
+        loop {
+            let current_char_pos = self.cursor.get_position();
+            let next_char = self.cursor.peek().cloned();
+
+            //TODO: check how lex behaves with comment after }
+            match self.cursor.peek_two() {
+                (Some('/'), Some('/')) if !is_str_mode => {
+                    res.append(&mut self.cursor.next_until_end_of_line());
+                    continue;
+                }
+                (Some('/'), Some('*')) if !is_str_mode => {
+                    res.append(&mut self.read_multi_line_comment()?);
+                    continue;
+                }
+                (_, _) => {}
+            }
+
+            match next_char {
+                Some('"') => {
+                    self.cursor.next();
+                    res.push('"');
+                    is_str_mode = !is_str_mode;
+                }
+                //TODO: test if action ends with "something/(EOF)
+                Some('\\') if is_str_mode => {
+                    self.cursor.next();
+                    res.push('\\');
+                    res.push(self.cursor.next().ok_or(LexError::new(
+                        LexErrorKind::UnexpectedEndOfInputAfterEscape,
+                        current_char_pos,
+                    ))?);
+                }
+                Some('{') if !is_str_mode => {
+                    self.cursor.next();
+                    res.push('{');
+                    bracket_depth += 1;
+                }
+                //TODO: looks like shit
+                Some('}') if !is_str_mode => {
+                    bracket_depth -= 1;
+                    if bracket_depth == 0 {
+                        match block_type {
+                            CCodeBlockType::Regular => {
+                                res.append(&mut self.cursor.next_until_end_of_line());
+                                self.cursor.next();
+                            }
+                            CCodeBlockType::Lex => {
+                                if let Some(&c) = res.last() {
+                                    if res.last() != Some(&'%') {
+                                        return Err(LexError::new(
+                                            LexErrorKind::UnexpectedCharacter(c, '%'),
+                                            current_char_pos.prev(),
+                                        ));
+                                    }
+                                    self.cursor.next();
+                                    res.push('}');
+                                    self.cursor.skip_spaces_and_tabs();
+                                    self.assert_next_is_newline()?;
+                                } else {
+                                    return Err(LexError::new(
+                                        LexErrorKind::Internal("TODO: ".to_string()),
+                                        current_char_pos,
+                                    ));
+                                }
+                            }
+                        }
+                        break;
+                    } else {
+                        self.cursor.next();
+                        res.push('}');
+                    }
+                }
+                Some(c) => {
+                    self.cursor.next();
+                    res.push(c);
+                }
+                None => {
+                    if bracket_depth != 0 {
+                        return Err(LexError::new(
+                            LexErrorKind::UnterminatedCodeBlock,
+                            cursor_pos,
+                        ));
+                    }
+                    if is_str_mode {
+                        return Err(LexError::new(LexErrorKind::UnterminatedString, cursor_pos));
+                    }
+                    break;
+                }
+            }
+        }
+        Ok(res)
     }
 
-    //TODO: handle unclosed code block }
-    fn read_pair(&mut self) -> Result<Pair, LexError> {
-        let position = self.cursor.get_position();
+    fn read_regex_like_expression(&mut self) -> Result<Vec<char>, LexError> {
         let mut key = Vec::with_capacity(4);
         //TODO: review carefully when parantesses
         //TODO: review carefully when [] ][ are escaped for regex
@@ -141,99 +233,54 @@ impl<'a> LexFileTokenizer<'a> {
                 }
             }
         }
-
         if !delimiter_stack.is_empty() {
-            return Err(LexError::new(
+            Err(LexError::new(
                 LexErrorKind::UnbalancedBrackets,
+                self.cursor.get_position(),
+            ))
+        } else {
+            Ok(key)
+        }
+    }
+
+    //TODO: handle unclosed code block }
+    fn read_pair(&mut self) -> Result<Pair, LexError> {
+        let start_position = self.cursor.get_position();
+
+        let key = self.read_regex_like_expression()?;
+        self.cursor.skip_spaces_and_tabs();
+        let value = {
+            if self.cursor.peek() == Some(&'{') {
+                self.read_c_code_block(CCodeBlockType::Regular)?
+            } else {
+                self.cursor.next_until_end_of_line()
+            }
+        };
+        //TODO: check this one, not sure now where value finishes
+        self.cursor.skip_spaces_and_tabs();
+        Ok((start_position, key, value))
+    }
+
+    // TODO: change name? every other fn starts with read_ pushes token, but this one returns data
+    //TODO: review such comments usage in the rules section
+    fn read_multi_line_comment(&mut self) -> Result<Vec<char>, LexError> {
+        let mut buffer = Vec::with_capacity(16);
+        let pos = self.cursor.get_position();
+
+        if self.cursor.peek_two() != ((Some('/'), Some('*'))) {
+            return Err(LexError::new(
+                LexErrorKind::Internal(
+                    "Trying to read multi-line comment, but the block doesn't start with \"/*\""
+                        .to_string(),
+                ),
                 self.cursor.get_position(),
             ));
         }
-
-        self.cursor.skip_spaces_and_tabs();
-
-        let mut is_str_mode = false;
-        let multiline_code_block = self.cursor.peek() == Some(&'{');
-        let mut bracket_depth = 0;
-        let val_start_pos = self.cursor.get_position();
-        let mut value = Vec::with_capacity(32);
-
-        if multiline_code_block {
-            self.cursor.next();
-            value.push('{');
-            bracket_depth = 1;
-        }
-
-        loop {
-            let current_char_pos = self.cursor.get_position();
-            let next_char = self.cursor.peek().cloned();
-
-            match next_char {
-                Some('"') => {
-                    self.cursor.next();
-                    value.push('"');
-                    is_str_mode = !is_str_mode;
-                }
-                //TODO: test if action ends with "something/(EOF)
-                Some('\\') if is_str_mode => {
-                    self.cursor.next();
-                    value.push('\\');
-                    value.push(self.cursor.next().ok_or(LexError::new(
-                        LexErrorKind::UnexpectedEndOfInputAfterEscape,
-                        current_char_pos,
-                    ))?);
-                }
-                Some('{') if !is_str_mode && multiline_code_block => {
-                    self.cursor.next();
-                    value.push('{');
-                    bracket_depth += 1;
-                }
-                Some('}') if !is_str_mode && multiline_code_block => {
-                    self.cursor.next();
-                    value.push('}');
-                    bracket_depth -= 1;
-                    if bracket_depth == 0 {
-                        value.append(&mut self.cursor.next_until_end_of_line());
-                        self.cursor.next();
-                        break;
-                    }
-                }
-                Some('\n') if !multiline_code_block => {
-                    break;
-                }
-                Some(c) => {
-                    self.cursor.next();
-                    value.push(c);
-                }
-                None => {
-                    if multiline_code_block && bracket_depth != 0 {
-                        return Err(LexError::new(
-                            LexErrorKind::UnterminatedCodeBlock,
-                            val_start_pos,
-                        ));
-                    }
-                    if is_str_mode {
-                        return Err(LexError::new(
-                            LexErrorKind::UnterminatedString,
-                            val_start_pos,
-                        ));
-                    }
-                    break;
-                }
-            }
-        }
-
-        Ok((position, key, value))
-    }
-
-    fn read_multi_comment_block(&mut self) -> Result<(), LexError> {
-        let mut buffer = Vec::with_capacity(16);
-        let pos = self.cursor.get_position();
 
         loop {
             if self.cursor.peek_two() == (Some('*'), Some('/')) {
                 buffer.push(self.cursor.next().unwrap());
                 buffer.push(self.cursor.next().unwrap());
-                self.res.push(Token::MultilineComment(pos, buffer));
                 break;
             }
             match self.cursor.next() {
@@ -241,7 +288,7 @@ impl<'a> LexFileTokenizer<'a> {
                 Some(c) => buffer.push(c),
             }
         }
-        Ok(())
+        Ok(buffer)
     }
 
     fn handle_section_end(&mut self) -> Result<(), LexError> {
@@ -262,23 +309,26 @@ impl<'a> LexFileTokenizer<'a> {
         loop {
             self.cursor.skip_white_spaces();
             let cursor_is_on_line_start = self.cursor.is_on_line_beginning();
+            let cursor_pos = self.cursor.get_position();
             match self.cursor.peek_two() {
                 (Some('%'), Some('{')) => {
-                    self.cursor.next();
-                    self.cursor.next();
-                    self.read_code_block()?
+                    let code = self.read_c_code_block(CCodeBlockType::Lex)?;
+                    self.res.push(Token::CodeBlock(cursor_pos, code))
                 }
                 (Some('%'), Some('%')) => {
                     self.handle_section_end()?;
                     break;
                 }
-                (Some('/'), Some('*')) => self.read_multi_comment_block()?,
+                (Some('/'), Some('*')) => {
+                    let comment = self.read_multi_line_comment()?;
+                    self.res.push(Token::MultilineComment(cursor_pos, comment));
+                }
                 (Some(_), _) if cursor_is_on_line_start => {
                     let (pos, key, value) = self.read_pair()?;
                     self.res.push(Token::Definition(pos, key, value))
                 }
                 (Some(_), _) if !cursor_is_on_line_start => self.res.push(Token::CodeBlock(
-                    self.cursor.get_position(),
+                    cursor_pos,
                     self.cursor.next_until_end_of_line(),
                 )),
                 _ => return Err(LexError::new_general(LexErrorKind::NoSeparatorsFound)),
@@ -292,6 +342,7 @@ impl<'a> LexFileTokenizer<'a> {
         loop {
             self.cursor.skip_white_spaces();
             let cursor_is_on_line_start = self.cursor.is_on_line_beginning();
+            let cursor_pos = self.cursor.get_position();
             let first_two = self.cursor.peek_two();
 
             if self.cursor.is_eof() {
@@ -304,12 +355,11 @@ impl<'a> LexFileTokenizer<'a> {
             }
 
             if first_two == (Some('%'), Some('{')) {
-                self.cursor.next();
-                self.cursor.next();
                 if rule_seen {
                     //TODO: Warning? By lex docs it is undefined behaviour
                 }
-                self.read_code_block()?;
+                let code = self.read_c_code_block(CCodeBlockType::Lex)?;
+                self.res.push(Token::CodeBlock(cursor_pos, code));
                 continue;
             }
 
@@ -318,7 +368,8 @@ impl<'a> LexFileTokenizer<'a> {
                 if rule_seen {
                     //TODO: need to handle?
                 }
-                self.read_multi_comment_block()?;
+                let comment = self.read_multi_line_comment()?;
+                self.res.push(Token::MultilineComment(cursor_pos, comment));
                 continue;
             }
 
@@ -372,12 +423,35 @@ mod tests {
     use rstest::rstest;
     use std::fs;
     use std::path::PathBuf;
+    const BASE_DIR: &str = "test_config/tokenizer/";
+    const SNAPSHOT_BASE_FOLDER: &str = "../../test_config/result_snaps/tokenizer/";
 
     mod definition_table_test {
         use super::*;
         use insta::with_settings;
+        use std::path::Path;
         //TODO: test spaces and tabs after code block
         //TODO: test error when any line starts with whitespace
+
+        fn split_relative_path(rel_path_to_conf: &str) -> (String, String) {
+            let path = Path::new(rel_path_to_conf);
+
+            let file_name = path
+                .file_name()
+                .and_then(std::ffi::OsStr::to_str)
+                .map(String::from)
+                .expect(&format!("Can't get file_name from: {}", rel_path_to_conf));
+
+            let folder_path = path
+                .parent() // Returns Option<&Path>
+                .filter(|p| !p.as_os_str().is_empty())
+                .and_then(Path::to_str)
+                .map(String::from)
+                // If there's no parent (path was just "filename.ext"), default to "."
+                .unwrap_or_else(|| ".".to_string());
+
+            (folder_path, file_name)
+        }
 
         #[rstest]
         /// Parameterized test verifying `LexFileTokenizer` output for `.l` files.
@@ -386,16 +460,19 @@ mod tests {
         fn load_lex_configuration_files(#[files("test_config/tokenizer/**/*.l")] path: PathBuf) {
             // given
             let input_content = fs::read_to_string(&path)
-                .unwrap_or_else(|err| panic!("Error: Could not read input {:?}: {}", path, err));
+                .unwrap_or_else(|err| panic!("Error: Can't read input {:?}: {}", path, err));
 
-            // the name of the generated snapshot
-            let test_name = format!("{path:?}")
-                .split_once("test_config/tokenizer/")
+            let config_file_path = format!("{path:?}")
+                .split_once(BASE_DIR)
                 .expect(
                     "Failed to find 'test_config/tokenizer/' segment in the formatted path string",
                 )
-                .1 // Get the part after the delimiter (e.g., "subdir/file.l")
-                .replace(['/', '.', '"', '\\'], "_");
+                .1
+                .trim_end_matches(".l\"")
+                .to_string();
+
+            let (conf_rel_path, conf_name) = split_relative_path(&config_file_path);
+            let snapshot_path = format!("{SNAPSHOT_BASE_FOLDER}/{conf_rel_path}");
 
             // when
             let result: Result<Vec<Token>, LexError> = LexFileTokenizer::parse(&input_content);
@@ -403,13 +480,13 @@ mod tests {
             // then
             with_settings!(
                 {
-                    snapshot_path => "../../test_config/result_snaps/tokenizer", // Centralized snapshot location
+                    snapshot_path => snapshot_path,
                     prepend_module_to_snapshot => false, // Avoid module path prefix in snapshot filename
                 },
                 {
                     // Assert tokenization result (Ok or Err) against the YAML snapshot.
                     // Run `cargo insta review` to approve changes on first run or after modifications.
-                    insta::assert_yaml_snapshot!(test_name, result);
+                    insta::assert_yaml_snapshot!(conf_name, result);
                 }
             );
         }

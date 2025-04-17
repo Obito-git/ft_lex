@@ -5,8 +5,10 @@ expression: result
 Ok:
   - CodeBlock:
       - cur_line: 1
-        cur_pos: 2
-      - - "\n"
+        cur_pos: 0
+      - - "{"
+        - "%"
+        - "\n"
         - /
         - "*"
         - " "
@@ -146,6 +148,8 @@ Ok:
         - h
         - ">"
         - "\n"
+        - "%"
+        - "}"
   - Definition:
       - cur_line: 7
         cur_pos: 0

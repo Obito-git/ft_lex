@@ -19,6 +19,13 @@ impl CursorPosition {
     pub fn new(cur_line: usize, cur_pos: usize) -> Self {
         CursorPosition { cur_line, cur_pos }
     }
+    
+    pub fn prev(&self) -> Self {
+        CursorPosition {
+            cur_line: self.cur_line,
+            cur_pos: self.cur_pos.checked_sub(1).unwrap_or(0),
+        }
+    }
 }
 
 impl Default for CursorPosition {

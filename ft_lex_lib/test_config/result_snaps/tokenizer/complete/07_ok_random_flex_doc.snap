@@ -94,8 +94,10 @@ Ok:
         - l
   - CodeBlock:
       - cur_line: 7
-        cur_pos: 2
-      - - "\n"
+        cur_pos: 0
+      - - "{"
+        - "%"
+        - "\n"
         - "#"
         - d
         - e
@@ -202,6 +204,8 @@ Ok:
         - "0"
         - ;
         - "\n"
+        - "%"
+        - "}"
   - PercentPercent:
       cur_line: 13
       cur_pos: 0

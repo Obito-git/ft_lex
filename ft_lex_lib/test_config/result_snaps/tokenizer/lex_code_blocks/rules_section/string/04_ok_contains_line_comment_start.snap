@@ -1,0 +1,76 @@
+---
+source: ft_lex_lib/src/tokenizer/mod.rs
+expression: result
+---
+Ok:
+  - PercentPercent:
+      cur_line: 1
+      cur_pos: 0
+  - CodeBlock:
+      - cur_line: 4
+        cur_pos: 0
+      - - "{"
+        - "%"
+        - "\n"
+        - " "
+        - " "
+        - " "
+        - " "
+        - c
+        - h
+        - a
+        - r
+        - " "
+        - "*"
+        - v
+        - a
+        - l
+        - i
+        - d
+        - _
+        - s
+        - t
+        - r
+        - i
+        - n
+        - g
+        - " "
+        - "="
+        - " "
+        - "\""
+        - /
+        - /
+        - "\""
+        - ;
+        - "\n"
+        - "%"
+        - "}"
+  - Rule:
+      - cur_line: 8
+        cur_pos: 0
+      - - "["
+        - a
+        - "-"
+        - z
+        - "]"
+      - - p
+        - r
+        - i
+        - n
+        - t
+        - f
+        - (
+        - "\""
+        - H
+        - i
+        - " "
+        - t
+        - h
+        - e
+        - r
+        - e
+        - "\\"
+        - n
+        - "\""
+        - )
+        - ;

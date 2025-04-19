@@ -53,10 +53,7 @@ impl<'a> LexFileTokenizer<'a> {
         }
     }
 
-    //TODO: handle \ in single quotes
-    //TODO: handle " and %} in comments
     // TODO: change name? every other fn starts with read_ pushes token, but this one returns data
-    //TODO: test everything that I test in code block in definition section in the rules section
     fn read_c_code_block(&mut self, block_type: CCodeBlockType) -> Result<Vec<char>, LexError> {
         let mut is_str_mode = false;
         let cursor_pos = self.cursor.get_position();
@@ -173,7 +170,6 @@ impl<'a> LexFileTokenizer<'a> {
         let mut key = Vec::with_capacity(4);
         //TODO: review carefully when parantesses
         //TODO: review carefully when [] ][ are escaped for regex
-        //TODO: review escaped " inside ""
 
         //TODO: test good {}
         let mut delimiter_stack = Vec::with_capacity(8);
@@ -387,7 +383,7 @@ impl<'a> LexFileTokenizer<'a> {
         Ok(())
     }
 
-    fn analyze(&mut self) -> Result<(), LexError> {
+    fn start(&mut self) -> Result<(), LexError> {
         self.read_first_section()?;
         self.read_second_section()?;
 
@@ -404,14 +400,14 @@ impl<'a> LexFileTokenizer<'a> {
         }
     }
 
-    pub fn parse(s: &'a String) -> Result<Vec<Token>, LexError> {
+    pub fn tokenize(s: &'a String) -> Result<Vec<Token>, LexError> {
         let mut parser = Self {
             cursor: Cursor::new(s.chars().peekable()),
             res: vec![],
             percent_percent_count: 0,
         };
 
-        parser.analyze()?;
+        parser.start()?;
 
         Ok(parser.res)
     }
@@ -475,7 +471,7 @@ mod tests {
             let snapshot_path = format!("{SNAPSHOT_BASE_FOLDER}/{conf_rel_path}");
 
             // when
-            let result: Result<Vec<Token>, LexError> = LexFileTokenizer::parse(&input_content);
+            let result: Result<Vec<Token>, LexError> = LexFileTokenizer::tokenize(&input_content);
 
             // then
             with_settings!(

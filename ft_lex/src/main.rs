@@ -50,7 +50,7 @@ fn main() {
         exit(1);
     }
     match fs::read_to_string(args[0].clone()) {
-        Ok(data) => match LexFileTokenizer::parse(&data) {
+        Ok(data) => match LexFileTokenizer::tokenize(&data) {
             Ok(tokens) => println!("{:?}", tokens),
             Err(e) => println!("{}", format_lex_error(&e, &data, args[0].clone())),
         },

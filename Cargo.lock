@@ -59,6 +59,8 @@ name = "ft_lex_lib"
 version = "0.1.0"
 dependencies = [
  "insta",
+ "lazy_static",
+ "regex",
  "rstest",
  "serde",
 ]
@@ -141,6 +143,12 @@ dependencies = [
  "serde",
  "similar",
 ]
+
+[[package]]
+name = "lazy_static"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
@@ -262,9 +270,8 @@ checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
 
 [[package]]
 name = "rstest"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fc39292f8613e913f7df8fa892b8944ceb47c247b78e1b1ae2f09e019be789d"
+version = "0.25.0-dev"
+source = "git+https://github.com/Obito-git/rstest.git?branch=306_ignore_folders#4c473a704f620ba9633177efea26099e9b8f1d16"
 dependencies = [
  "futures-timer",
  "futures-util",
@@ -274,9 +281,8 @@ dependencies = [
 
 [[package]]
 name = "rstest_macros"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f168d99749d307be9de54d23fd226628d99768225ef08f6ffb52e0182a27746"
+version = "0.25.0-dev"
+source = "git+https://github.com/Obito-git/rstest.git?branch=306_ignore_folders#4c473a704f620ba9633177efea26099e9b8f1d16"
 dependencies = [
  "cfg-if",
  "glob",

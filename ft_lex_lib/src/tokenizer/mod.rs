@@ -416,75 +416,129 @@ impl<'a> LexFileTokenizer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use insta::with_settings;
+    use lazy_static::lazy_static;
+    use regex::Regex;
     use rstest::rstest;
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
+    use std::time::Duration;
+
     const BASE_DIR: &str = "test_config/tokenizer/";
+    const TEST_CONFIG_FILENAME_REGEX: &str = r"^\d{2}_(ok|err)_.+\.l\.example$";
     const SNAPSHOT_BASE_FOLDER: &str = "../../test_config/result_snaps/tokenizer/";
 
-    mod definition_table_test {
-        use super::*;
-        use insta::with_settings;
-        use std::path::Path;
-        //TODO: test spaces and tabs after code block
-        //TODO: test error when any line starts with whitespace
+    lazy_static! {
+        // Regex creation isn't very cheap, so creating it once with lazy static
+        static ref test_file_name: Regex = Regex::new(TEST_CONFIG_FILENAME_REGEX).unwrap();
+    }
 
-        fn split_relative_path(rel_path_to_conf: &str) -> (String, String) {
-            let path = Path::new(rel_path_to_conf);
+    //TODO: test spaces and tabs after code block
+    //TODO: test error when any line starts with whitespace
 
-            let file_name = path
-                .file_name()
-                .and_then(std::ffi::OsStr::to_str)
-                .map(String::from)
-                .expect(&format!("Can't get file_name from: {}", rel_path_to_conf));
+    /// Splits related path to the conf file to path and file name.
+    /// # Arguments
+    ///
+    /// * `rel_path_to_conf`: relative path to the config file
+    ///
+    /// returns: (String, String) -> (path, file_name)
+    fn split_relative_path(rel_path_to_conf: &str) -> (String, String) {
+        let path = Path::new(rel_path_to_conf);
 
-            let folder_path = path
-                .parent() // Returns Option<&Path>
-                .filter(|p| !p.as_os_str().is_empty())
-                .and_then(Path::to_str)
-                .map(String::from)
-                // If there's no parent (path was just "filename.ext"), default to "."
-                .unwrap_or_else(|| ".".to_string());
+        let file_name = path
+            .file_name()
+            .and_then(std::ffi::OsStr::to_str)
+            .map(String::from)
+            .expect(&format!("Can't get file_name from: {}", rel_path_to_conf));
 
-            (folder_path, file_name)
+        let folder_path = path
+            .parent() // Returns Option<&Path>
+            .filter(|p| !p.as_os_str().is_empty())
+            .and_then(Path::to_str)
+            .map(String::from)
+            // If there's no parent (path was just "filename.ext"), default to "."
+            .unwrap_or_else(|| ".".to_string());
+
+        (folder_path, file_name)
+    }
+
+    /// Parameterized test verifying tokenizer output for lex/flex configuration files.
+    ///
+    /// Uses `rstest` to discover test files within the `test_config/tokenizer/**/*` directory.
+    /// Each discovered file must adhere to the specific naming convention:
+    /// `<NN>_<TYPE>_<NAME>.lex.example`
+    ///
+    /// Where:
+    ///   - `<NN>`: A two-digit number (e.g., `01`-`99`), representing the test case identifier.
+    ///   - `<TYPE>`: Specifies the expected outcome - either `ok` (successful tokenization
+    ///             is expected) or `err` (indicating a tokenization error
+    ///             is expected).
+    ///   - `<NAME>`: A descriptive name for the test configuration (e.g., `basic_rules`,
+    ///             `unterminated_comment`).
+    ///   - `.lex.example`: The required file extension. (The `.example` suffix is used to
+    ///                     prevent misidentification of the project's language by GitHub).
+    ///
+    /// The test tokenizes the content of each matched configuration file. The resulting
+    /// sequence of tokens (or the resulting error) is then asserted against an `insta`
+    /// YAML snapshot using `insta::assert_yaml_snapshot!`.
+    ///
+    /// Snapshot files (`.snap`) are stored in a parallel directory structure under
+    /// `result_snaps`. For an input file like
+    /// `test_config/tokenizer/feature_x/05_ok_keywords.lex.example`, the corresponding snapshot
+    /// will be located at
+    /// `test_config/tokenizer/result_snaps/feature_x/05_ok_keywords.snap`.
+    ///
+    /// **Snapshot Workflow:**
+    /// When running these tests for the first time, or if the tokenizer's output changes for
+    /// an existing test case, `insta::assert_yaml_snapshot!` will serialize the new result
+    /// to a `.snap.new` file. These new or updated snapshots are considered 'pending' and
+    /// must be manually reviewed and accepted (or rejected) using the command:
+    /// `cargo insta review`
+    ///
+    /// Once a snapshot is accepted via the review process, the `.snap.new` file is renamed
+    /// to `.snap`, becoming the official reference for future runs. Subsequent test executions
+    /// will compare the tokenizer's output directly against the content of the corresponding
+    /// accepted `.snap` file.
+    #[rstest]
+    #[timeout(Duration::from_secs(1))]
+    fn load_lex_configuration_files(#[files("test_config/tokenizer/**/*")] path: PathBuf) {
+        // given
+        let input_content = fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("Error: Can't read input {:?}: {}", path, err));
+
+        let config_file_path = format!("{path:?}")
+            .split_once(BASE_DIR)
+            .expect("Failed to find 'test_config/tokenizer/' segment in the formatted path string")
+            .1
+            .trim_end_matches("\"")
+            .to_string();
+
+        let (conf_rel_path, mut conf_name) = split_relative_path(&config_file_path);
+
+        if !test_file_name.is_match(&conf_name) {
+            panic!(
+                "Test config \"{conf_name}\": should match regex \"{TEST_CONFIG_FILENAME_REGEX}\""
+            )
         }
 
-        #[rstest]
-        /// Parameterized test verifying `LexFileTokenizer` output for `.l` files.
-        /// Uses `rstest` to discover files in `test_config/tokenizer/**/*.l`.
-        /// Asserts the tokenization result against an `insta` YAML snapshot.
-        fn load_lex_configuration_files(#[files("test_config/tokenizer/**/*.l")] path: PathBuf) {
-            // given
-            let input_content = fs::read_to_string(&path)
-                .unwrap_or_else(|err| panic!("Error: Can't read input {:?}: {}", path, err));
+        conf_name = conf_name.trim_end_matches(".l.example").to_string();
 
-            let config_file_path = format!("{path:?}")
-                .split_once(BASE_DIR)
-                .expect(
-                    "Failed to find 'test_config/tokenizer/' segment in the formatted path string",
-                )
-                .1
-                .trim_end_matches(".l\"")
-                .to_string();
+        let snapshot_path = format!("{SNAPSHOT_BASE_FOLDER}/{conf_rel_path}");
 
-            let (conf_rel_path, conf_name) = split_relative_path(&config_file_path);
-            let snapshot_path = format!("{SNAPSHOT_BASE_FOLDER}/{conf_rel_path}");
+        // when
+        let result: Result<Vec<Token>, LexError> = LexFileTokenizer::tokenize(&input_content);
 
-            // when
-            let result: Result<Vec<Token>, LexError> = LexFileTokenizer::tokenize(&input_content);
-
-            // then
-            with_settings!(
-                {
-                    snapshot_path => snapshot_path,
-                    prepend_module_to_snapshot => false, // Avoid module path prefix in snapshot filename
-                },
-                {
-                    // Assert tokenization result (Ok or Err) against the YAML snapshot.
-                    // Run `cargo insta review` to approve changes on first run or after modifications.
-                    insta::assert_yaml_snapshot!(conf_name, result);
-                }
-            );
-        }
+        // then
+        with_settings!(
+            {
+                snapshot_path => snapshot_path,
+                prepend_module_to_snapshot => false, // Avoid module path prefix in snapshot filename
+            },
+            {
+                // Assert tokenization result (Ok or Err) against the YAML snapshot.
+                // Run `cargo insta review` to approve changes on first run or after modifications.
+                insta::assert_yaml_snapshot!(conf_name, result);
+            }
+        );
     }
 }

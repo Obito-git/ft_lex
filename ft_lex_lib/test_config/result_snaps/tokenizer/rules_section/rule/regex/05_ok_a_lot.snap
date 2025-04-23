@@ -4032,10 +4032,9 @@ Ok:
       cur_line: 95
       cur_pos: 0
   - CodeBlock:
-      - cur_line: 96
+      - cur_line: 97
         cur_pos: 0
-      - - "\n"
-        - /
+      - - /
         - "*"
         - " "
         - O

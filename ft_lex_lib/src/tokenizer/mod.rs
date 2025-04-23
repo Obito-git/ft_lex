@@ -261,7 +261,6 @@ impl<'a> LexFileTokenizer<'a> {
     }
 
     // TODO: change name? every other fn starts with read_ pushes token, but this one returns data
-    //TODO: review such comments usage in the rules section
     fn read_multi_line_comment(&mut self) -> Result<Vec<char>, LexError> {
         let mut buffer = Vec::with_capacity(16);
         let pos = self.cursor.get_position();
@@ -319,7 +318,8 @@ impl<'a> LexFileTokenizer<'a> {
                     break;
                 }
                 (Some('/'), Some('*')) => {
-                    let comment = self.read_multi_line_comment()?;
+                    let mut comment = self.read_multi_line_comment()?;
+                    comment.extend(self.cursor.next_until_end_of_line());
                     self.res.push(Token::MultilineComment(cursor_pos, comment));
                 }
                 (Some(_), _) if cursor_is_on_line_beginning => {
@@ -367,16 +367,6 @@ impl<'a> LexFileTokenizer<'a> {
                 continue;
             }
 
-            //TODO: check if conflicts with rule regex
-            if first_two == (Some('/'), Some('*')) {
-                if first_rule.is_some() {
-                    //TODO: need to handle?
-                }
-                let comment = self.read_multi_line_comment()?;
-                self.res.push(Token::MultilineComment(cursor_pos, comment));
-                continue;
-            }
-
             if !cursor_is_on_line_start && first_rule.is_none() {
                 self.res.push(Token::CodeBlock(
                     self.cursor.get_position(),
@@ -396,6 +386,8 @@ impl<'a> LexFileTokenizer<'a> {
     fn start(&mut self) -> Result<(), LexError> {
         self.read_first_section()?;
         self.read_second_section()?;
+        
+        self.cursor.skip_white_spaces();
 
         // User code section
         let code_block_position = self.cursor.get_position();

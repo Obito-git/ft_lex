@@ -1,0 +1,6 @@
+DQ_STRING   \"([^"\\]|\\.)*\"   /* Double-quoted string with escapes */
+SQ_STRING   \'([^'\\]|\\.)*\'   /* Single-quoted string with escapes */
+C_COMMENT   \/\*([^*]|\*+[^*/])*\*+\/ /* C-style block comment */
+CPP_COMMENT \/\/[^\n]*{EOL}?       /* C++ style line comment */
+%%
+%%

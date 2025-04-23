@@ -1,0 +1,4 @@
+/*   Accepted by tokenizer but rejected by parser    */
+MY_THING
+%%
+%%

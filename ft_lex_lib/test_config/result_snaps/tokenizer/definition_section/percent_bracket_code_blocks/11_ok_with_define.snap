@@ -1,0 +1,154 @@
+---
+source: ft_lex_lib/src/tokenizer/mod.rs
+expression: result
+---
+Ok:
+  - CodeBlock:
+      - cur_line: 1
+        cur_pos: 0
+      - - "{"
+        - "%"
+        - "\n"
+        - /
+        - "*"
+        - "\n"
+        - " "
+        - "*"
+        - " "
+        - M
+        - u
+        - l
+        - t
+        - i
+        - "-"
+        - l
+        - i
+        - n
+        - e
+        - " "
+        - C
+        - " "
+        - c
+        - o
+        - m
+        - m
+        - e
+        - n
+        - t
+        - " "
+        - e
+        - x
+        - p
+        - l
+        - a
+        - i
+        - n
+        - i
+        - n
+        - g
+        - " "
+        - t
+        - h
+        - e
+        - " "
+        - p
+        - u
+        - r
+        - p
+        - o
+        - s
+        - e
+        - "\n"
+        - " "
+        - "*"
+        - " "
+        - o
+        - f
+        - " "
+        - t
+        - h
+        - i
+        - s
+        - " "
+        - d
+        - e
+        - f
+        - i
+        - n
+        - i
+        - t
+        - i
+        - o
+        - n
+        - " "
+        - b
+        - l
+        - o
+        - c
+        - k
+        - "."
+        - "\n"
+        - " "
+        - "*"
+        - /
+        - "\n"
+        - "#"
+        - d
+        - e
+        - f
+        - i
+        - n
+        - e
+        - " "
+        - M
+        - A
+        - X
+        - _
+        - B
+        - U
+        - F
+        - F
+        - E
+        - R
+        - _
+        - S
+        - I
+        - Z
+        - E
+        - " "
+        - "1"
+        - "0"
+        - "2"
+        - "4"
+        - "\n"
+        - /
+        - /
+        - " "
+        - S
+        - i
+        - n
+        - g
+        - l
+        - e
+        - " "
+        - l
+        - i
+        - n
+        - e
+        - " "
+        - c
+        - o
+        - m
+        - m
+        - e
+        - n
+        - t
+        - "\n"
+        - "%"
+        - "}"
+  - PercentPercent:
+      cur_line: 9
+      cur_pos: 0
+  - PercentPercent:
+      cur_line: 10
+      cur_pos: 0

@@ -1,0 +1,275 @@
+---
+source: ft_lex_lib/src/tokenizer/mod.rs
+expression: result
+---
+Ok:
+  - Definition:
+      - cur_line: 1
+        cur_pos: 0
+      - - D
+        - I
+        - G
+        - I
+        - T
+      - - "["
+        - "0"
+        - "-"
+        - "9"
+        - "]"
+  - Definition:
+      - cur_line: 2
+        cur_pos: 0
+      - - H
+        - E
+        - X
+        - D
+        - I
+        - G
+        - I
+        - T
+      - - "["
+        - "0"
+        - "-"
+        - "9"
+        - a
+        - "-"
+        - f
+        - A
+        - "-"
+        - F
+        - "]"
+  - Definition:
+      - cur_line: 3
+        cur_pos: 0
+      - - L
+        - E
+        - T
+        - T
+        - E
+        - R
+      - - "["
+        - a
+        - "-"
+        - z
+        - A
+        - "-"
+        - Z
+        - "]"
+  - Definition:
+      - cur_line: 4
+        cur_pos: 0
+      - - U
+        - N
+        - D
+        - E
+        - R
+        - S
+        - C
+        - O
+        - R
+        - E
+      - - _
+  - Definition:
+      - cur_line: 5
+        cur_pos: 0
+      - - W
+        - H
+        - I
+        - T
+        - E
+        - S
+        - P
+        - A
+        - C
+        - E
+      - - "["
+        - " "
+        - "\\"
+        - t
+        - "\\"
+        - v
+        - "\\"
+        - f
+        - "]"
+        - " "
+        - /
+        - "*"
+        - " "
+        - S
+        - p
+        - a
+        - c
+        - e
+        - ","
+        - " "
+        - t
+        - a
+        - b
+        - ","
+        - " "
+        - v
+        - e
+        - r
+        - t
+        - i
+        - c
+        - a
+        - l
+        - " "
+        - t
+        - a
+        - b
+        - ","
+        - " "
+        - f
+        - o
+        - r
+        - m
+        - " "
+        - f
+        - e
+        - e
+        - d
+        - " "
+        - "*"
+        - /
+  - Definition:
+      - cur_line: 6
+        cur_pos: 0
+      - - E
+        - O
+        - L
+      - - "\\"
+        - n
+  - Definition:
+      - cur_line: 7
+        cur_pos: 0
+      - - D
+        - O
+        - T
+      - - "\\"
+        - "."
+  - Definition:
+      - cur_line: 8
+        cur_pos: 0
+      - - P
+        - L
+        - U
+        - S
+      - - "\\"
+        - +
+  - Definition:
+      - cur_line: 9
+        cur_pos: 0
+      - - S
+        - T
+        - A
+        - R
+      - - "\\"
+        - "*"
+  - Definition:
+      - cur_line: 10
+        cur_pos: 0
+      - - Q
+        - M
+        - A
+        - R
+        - K
+      - - "\\"
+        - "?"
+  - Definition:
+      - cur_line: 11
+        cur_pos: 0
+      - - L
+        - P
+        - A
+        - R
+        - E
+        - N
+      - - "\\"
+        - (
+  - Definition:
+      - cur_line: 12
+        cur_pos: 0
+      - - R
+        - P
+        - A
+        - R
+        - E
+        - N
+      - - "\\"
+        - )
+  - Definition:
+      - cur_line: 13
+        cur_pos: 0
+      - - L
+        - B
+        - R
+        - A
+        - C
+        - E
+      - - "\\"
+        - "{"
+  - Definition:
+      - cur_line: 14
+        cur_pos: 0
+      - - R
+        - B
+        - R
+        - A
+        - C
+        - E
+      - - "\\"
+        - "}"
+  - Definition:
+      - cur_line: 15
+        cur_pos: 0
+      - - L
+        - B
+        - R
+        - A
+        - C
+        - K
+        - E
+        - T
+      - - "\\"
+        - "["
+  - Definition:
+      - cur_line: 16
+        cur_pos: 0
+      - - R
+        - B
+        - R
+        - A
+        - C
+        - K
+        - E
+        - T
+      - - "\\"
+        - "]"
+  - Definition:
+      - cur_line: 17
+        cur_pos: 0
+      - - P
+        - I
+        - P
+        - E
+      - - "\\"
+        - "|"
+  - Definition:
+      - cur_line: 18
+        cur_pos: 0
+      - - P
+        - E
+        - R
+        - C
+        - E
+        - N
+        - T
+      - - "%"
+  - PercentPercent:
+      cur_line: 19
+      cur_pos: 0
+  - PercentPercent:
+      cur_line: 20
+      cur_pos: 0

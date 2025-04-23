@@ -1,0 +1,20 @@
+DIGIT       [0-9]
+HEXDIGIT    [0-9a-fA-F]
+LETTER      [a-zA-Z]
+UNDERSCORE  _
+WHITESPACE  [ \t\v\f] /* Space, tab, vertical tab, form feed */
+EOL         \n
+DOT         \.
+PLUS        \+
+STAR        \*
+QMARK       \?
+LPAREN      \(
+RPAREN      \)
+LBRACE      \{
+RBRACE      \}
+LBRACKET    \[
+RBRACKET    \]
+PIPE        \|
+PERCENT     %
+%%
+%%

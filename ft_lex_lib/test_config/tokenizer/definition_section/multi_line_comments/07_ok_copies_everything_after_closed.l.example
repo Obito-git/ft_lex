@@ -1,0 +1,6 @@
+/* multi
+ * line
+ * comment */ same handling as lex
+
+%%
+%%

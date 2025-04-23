@@ -1,0 +1,14 @@
+DIGIT_POS   [[:digit:]]
+ALPHA_POS   [[:alpha:]]
+ALNUM_POS   [[:alnum:]]
+XDIGIT_POS  [[:xdigit:]]
+SPACE_POS   [[:space:]]  /* Includes \n, unlike WHITESPACE above */
+BLANK_POS   [[:blank:]]  /* Space and tab */
+PRINT_POS   [[:print:]]  /* Printable characters, including space */
+GRAPH_POS   [[:graph:]]  /* Printable characters, excluding space */
+UPPER_POS   [[:upper:]]
+LOWER_POS   [[:lower:]]
+PUNCT_POS   [[:punct:]]
+CNTRL_POS   [[:cntrl:]]
+%%
+%%

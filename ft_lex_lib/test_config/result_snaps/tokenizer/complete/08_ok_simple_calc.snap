@@ -536,10 +536,9 @@ Ok:
       cur_line: 21
       cur_pos: 0
   - CodeBlock:
-      - cur_line: 22
+      - cur_line: 23
         cur_pos: 0
-      - - "\n"
-        - /
+      - - /
         - "*"
         - "\n"
         - /

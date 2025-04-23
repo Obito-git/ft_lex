@@ -1,0 +1,65 @@
+---
+source: ft_lex_lib/src/tokenizer/mod.rs
+expression: result
+---
+Ok:
+  - MultilineComment:
+      - cur_line: 1
+        cur_pos: 0
+      - - /
+        - "*"
+        - " "
+        - m
+        - u
+        - l
+        - t
+        - i
+        - "\n"
+        - " "
+        - "*"
+        - " "
+        - l
+        - i
+        - n
+        - e
+        - "\n"
+        - " "
+        - "*"
+        - " "
+        - c
+        - o
+        - m
+        - m
+        - e
+        - n
+        - t
+        - " "
+        - "*"
+        - /
+        - " "
+        - s
+        - a
+        - m
+        - e
+        - " "
+        - h
+        - a
+        - n
+        - d
+        - l
+        - i
+        - n
+        - g
+        - " "
+        - a
+        - s
+        - " "
+        - l
+        - e
+        - x
+  - PercentPercent:
+      cur_line: 5
+      cur_pos: 0
+  - PercentPercent:
+      cur_line: 6
+      cur_pos: 0

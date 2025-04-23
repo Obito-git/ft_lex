@@ -1,0 +1,6 @@
+%%
+
+a       { /* default */ }
+b       { /* default */ }
+.       { /* default */ }
+%{      printf("GG");

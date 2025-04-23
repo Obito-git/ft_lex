@@ -12,6 +12,13 @@ section definition lexical analyse (tokenization):
 
 section definition parsing (syntax and correct logic check):
 
+---
+
+Any such input (beginning with a `<blank>` or within `"%{"` and `"%}"` delimiter lines) appearing at the beginning of the Rules section before any rules are specified shall be written to lex.yy.c after the declarations of variables for the yylex() function and before the first line of code in yylex(). Thus, user variables local to yylex() can be declared here, as well as application code to execute upon entry to yylex().
+
+The action taken by lex when encountering any input beginning with a <blank> or within "%{" and "%}" delimiter lines appearing in the Rules section but coming after one or more rules is undefined. The presence of such input may result in an erroneous definition of the yylex() function.
+
+---
 
 insta:
 - https://insta.rs/docs/quickstart/

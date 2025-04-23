@@ -123,7 +123,10 @@ impl<'a> LexFileTokenizer<'a> {
                                 if let Some(&c) = res.last() {
                                     if res.last() != Some(&'%') {
                                         return Err(LexError::new(
-                                            LexErrorKind::UnexpectedCharacter(c, '%'),
+                                            LexErrorKind::UnexpectedToken {
+                                                token: format!("{c}}}"),
+                                                msg: "The right sequence to close code block is \"%}\"".to_string(),
+                                            },
                                             current_char_pos.prev(),
                                         ));
                                     }
@@ -304,7 +307,7 @@ impl<'a> LexFileTokenizer<'a> {
     fn read_first_section(&mut self) -> Result<(), LexError> {
         loop {
             self.cursor.skip_white_spaces();
-            let cursor_is_on_line_start = self.cursor.is_on_line_beginning();
+            let cursor_is_on_line_beginning = self.cursor.is_on_line_beginning();
             let cursor_pos = self.cursor.get_position();
             match self.cursor.peek_two() {
                 (Some('%'), Some('{')) => {
@@ -319,11 +322,11 @@ impl<'a> LexFileTokenizer<'a> {
                     let comment = self.read_multi_line_comment()?;
                     self.res.push(Token::MultilineComment(cursor_pos, comment));
                 }
-                (Some(_), _) if cursor_is_on_line_start => {
+                (Some(_), _) if cursor_is_on_line_beginning => {
                     let (pos, key, value) = self.read_pair()?;
                     self.res.push(Token::Definition(pos, key, value))
                 }
-                (Some(_), _) if !cursor_is_on_line_start => self.res.push(Token::CodeBlock(
+                (Some(_), _) if !cursor_is_on_line_beginning => self.res.push(Token::CodeBlock(
                     cursor_pos,
                     self.cursor.next_until_end_of_line(),
                 )),
@@ -334,7 +337,7 @@ impl<'a> LexFileTokenizer<'a> {
     }
 
     fn read_second_section(&mut self) -> Result<(), LexError> {
-        let mut rule_seen = false;
+        let mut first_rule = None;
         loop {
             self.cursor.skip_white_spaces();
             let cursor_is_on_line_start = self.cursor.is_on_line_beginning();
@@ -351,8 +354,13 @@ impl<'a> LexFileTokenizer<'a> {
             }
 
             if first_two == (Some('%'), Some('{')) {
-                if rule_seen {
-                    //TODO: Warning? By lex docs it is undefined behaviour
+                if let Some(first_rule_pos) = first_rule {
+                    return Err(LexError::new(
+                        LexErrorKind::CodeBlockAfterRulesDetected {
+                            first_rule: first_rule_pos,
+                        },
+                        cursor_pos,
+                    ));
                 }
                 let code = self.read_c_code_block(CCodeBlockType::Lex)?;
                 self.res.push(Token::CodeBlock(cursor_pos, code));
@@ -361,7 +369,7 @@ impl<'a> LexFileTokenizer<'a> {
 
             //TODO: check if conflicts with rule regex
             if first_two == (Some('/'), Some('*')) {
-                if rule_seen {
+                if first_rule.is_some() {
                     //TODO: need to handle?
                 }
                 let comment = self.read_multi_line_comment()?;
@@ -369,7 +377,7 @@ impl<'a> LexFileTokenizer<'a> {
                 continue;
             }
 
-            if !cursor_is_on_line_start && !rule_seen {
+            if !cursor_is_on_line_start && first_rule.is_none() {
                 self.res.push(Token::CodeBlock(
                     self.cursor.get_position(),
                     self.cursor.next_until_end_of_line(),
@@ -377,7 +385,9 @@ impl<'a> LexFileTokenizer<'a> {
             } else {
                 let (pos, key, value) = self.read_pair()?;
                 self.res.push(Token::Rule(pos, key, value));
-                rule_seen = true;
+                if first_rule.is_none() {
+                    first_rule = Some(pos);
+                }
             }
         }
         Ok(())

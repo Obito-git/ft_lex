@@ -14,7 +14,8 @@ pub enum LexErrorKind {
     UnexpectedEndOfInputAfterEscape,
     UnmatchedBracket(char, char),
     UnbalancedBrackets,
-    UnexpectedCharacter(char, char),
+    UnexpectedToken { token: String, msg: String },
+    CodeBlockAfterRulesDetected { first_rule: CursorPosition },
     NoSeparatorsFound,
     Internal(String),
 }
@@ -37,7 +38,7 @@ impl LexError {
     pub fn new_general(kind: LexErrorKind) -> Self {
         LexError {
             kind,
-            position: None
+            position: None,
         }
     }
 
@@ -56,4 +57,3 @@ impl LexError {
         self.position.as_ref()
     }
 }
-

@@ -3,10 +3,7 @@ source: ft_lex_lib/src/tokenizer/mod.rs
 expression: result
 ---
 Err:
-  kind:
-    UnexpectedCharacter:
-      - "\n"
-      - "%"
+  kind: UnterminatedCommentBlock
   position:
-    cur_line: 5
+    cur_line: 2
     cur_pos: 0

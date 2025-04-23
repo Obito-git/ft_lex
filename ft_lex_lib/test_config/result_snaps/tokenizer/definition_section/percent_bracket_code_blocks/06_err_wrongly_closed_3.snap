@@ -4,9 +4,9 @@ expression: result
 ---
 Err:
   kind:
-    UnexpectedCharacter:
-      - "\n"
-      - "%"
+    UnexpectedToken:
+      token: "@}"
+      msg: "The right sequence to close code block is \"%}\""
   position:
     cur_line: 4
     cur_pos: 0

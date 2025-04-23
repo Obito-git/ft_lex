@@ -1,0 +1,129 @@
+---
+source: ft_lex_lib/src/tokenizer/mod.rs
+expression: result
+---
+Ok:
+  - Definition:
+      - cur_line: 1
+        cur_pos: 0
+      - - D
+        - I
+        - G
+        - I
+        - T
+      - - "["
+        - "0"
+        - "-"
+        - "9"
+        - "]"
+  - PercentPercent:
+      cur_line: 2
+      cur_pos: 0
+  - Rule:
+      - cur_line: 3
+        cur_pos: 0
+      - - "{"
+        - D
+        - I
+        - G
+        - I
+        - T
+        - "}"
+        - +
+      - - "{"
+        - " "
+        - p
+        - r
+        - i
+        - n
+        - t
+        - f
+        - (
+        - "\""
+        - N
+        - u
+        - m
+        - b
+        - e
+        - r
+        - ":"
+        - " "
+        - "%"
+        - s
+        - "\\"
+        - n
+        - "\""
+        - ","
+        - " "
+        - y
+        - y
+        - t
+        - e
+        - x
+        - t
+        - )
+        - ;
+        - " "
+        - "}"
+        - "\t"
+        - " "
+        - " "
+        - " "
+        - " "
+  - Rule:
+      - cur_line: 4
+        cur_pos: 0
+      - - "."
+      - - "{"
+        - " "
+        - p
+        - r
+        - i
+        - n
+        - t
+        - f
+        - (
+        - "\""
+        - O
+        - t
+        - h
+        - e
+        - r
+        - "\\"
+        - n
+        - "\""
+        - )
+        - ;
+        - " "
+        - "}"
+  - PercentPercent:
+      cur_line: 5
+      cur_pos: 0
+  - CodeBlock:
+      - cur_line: 6
+        cur_pos: 0
+      - - i
+        - n
+        - t
+        - " "
+        - m
+        - a
+        - i
+        - n
+        - (
+        - )
+        - " "
+        - "{"
+        - " "
+        - r
+        - e
+        - t
+        - u
+        - r
+        - n
+        - " "
+        - "0"
+        - ;
+        - " "
+        - "}"
+        - "\n"

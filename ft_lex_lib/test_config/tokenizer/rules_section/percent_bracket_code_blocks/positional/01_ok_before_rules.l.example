@@ -1,0 +1,10 @@
+%%
+%{
+// This block is fine
+%}
+^\w+\.(gif|png|jpg|jpeg)$                           { /* default */ }
+^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$         { /* default */ }
+.                                                   /* default */
+
+%%
+int main() { return 0; }

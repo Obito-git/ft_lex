@@ -1,0 +1,6 @@
+%%
+
+
+%{
+    char *valid_string = " <- not closed
+%}

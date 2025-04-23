@@ -4,9 +4,10 @@ expression: result
 ---
 Err:
   kind:
-    UnexpectedCharacter:
-      - "\n"
-      - "%"
+    CodeBlockAfterRulesDetected:
+      first_rule:
+        cur_line: 3
+        cur_pos: 0
   position:
-    cur_line: 4
+    cur_line: 6
     cur_pos: 0

@@ -1,0 +1,6 @@
+%%
+a   /* first rule */
+b   /* second rule */
+.   /* third rule */
+    this is undefined behaviour in lex, so we make it error to be sure
+%%

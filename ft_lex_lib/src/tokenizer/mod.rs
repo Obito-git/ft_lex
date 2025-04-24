@@ -367,7 +367,15 @@ impl<'a> LexFileTokenizer<'a> {
                 continue;
             }
 
-            if !cursor_is_on_line_start && first_rule.is_none() {
+            if !cursor_is_on_line_start {
+                if let Some(first_rule_pos) = first_rule {
+                    return Err(LexError::new(
+                        LexErrorKind::CodeLineAfterRulesDetected {
+                            first_rule: first_rule_pos,
+                        },
+                        cursor_pos,
+                    ));
+                }
                 self.res.push(Token::CodeBlock(
                     self.cursor.get_position(),
                     self.cursor.next_until_end_of_line(),
@@ -386,7 +394,7 @@ impl<'a> LexFileTokenizer<'a> {
     fn start(&mut self) -> Result<(), LexError> {
         self.read_first_section()?;
         self.read_second_section()?;
-        
+
         self.cursor.skip_white_spaces();
 
         // User code section

@@ -110,69 +110,6 @@ Ok:
         - "}"
   - Rule:
       - cur_line: 4
-        cur_pos: 2
-      - - "\""
-        - " "
-        - "\""
-      - - /
-        - "*"
-        - " "
-        - M
-        - a
-        - t
-        - c
-        - h
-        - e
-        - s
-        - " "
-        - a
-        - " "
-        - s
-        - i
-        - n
-        - g
-        - l
-        - e
-        - " "
-        - s
-        - p
-        - a
-        - c
-        - e
-        - " "
-        - (
-        - l
-        - e
-        - a
-        - d
-        - i
-        - n
-        - g
-        - " "
-        - w
-        - h
-        - i
-        - t
-        - e
-        - s
-        - p
-        - a
-        - c
-        - e
-        - " "
-        - i
-        - g
-        - n
-        - o
-        - r
-        - e
-        - d
-        - )
-        - " "
-        - "*"
-        - /
-  - Rule:
-      - cur_line: 5
         cur_pos: 0
       - - "["
         - " "
@@ -240,7 +177,7 @@ Ok:
         - " "
         - "}"
   - Rule:
-      - cur_line: 6
+      - cur_line: 5
         cur_pos: 0
       - - a
         - "\\"
@@ -309,7 +246,7 @@ Ok:
         - " "
         - "}"
   - Rule:
-      - cur_line: 7
+      - cur_line: 6
         cur_pos: 0
       - - a
         - b
@@ -384,7 +321,7 @@ Ok:
         - " "
         - "}"
   - Rule:
-      - cur_line: 8
+      - cur_line: 7
         cur_pos: 0
       - - "\""
         - e
@@ -409,6 +346,53 @@ Ok:
         - e
         - n
         - d
+        - s
+        - " "
+        - w
+        - i
+        - t
+        - h
+        - " "
+        - s
+        - p
+        - a
+        - c
+        - e
+        - " "
+        - "*"
+        - /
+        - " "
+        - "}"
+  - Rule:
+      - cur_line: 8
+        cur_pos: 0
+      - - "\""
+        - " "
+        - s
+        - t
+        - a
+        - r
+        - t
+        - s
+        - "\""
+      - - "{"
+        - " "
+        - /
+        - "*"
+        - " "
+        - P
+        - a
+        - t
+        - t
+        - e
+        - r
+        - n
+        - " "
+        - s
+        - t
+        - a
+        - r
+        - t
         - s
         - " "
         - w
@@ -428,53 +412,6 @@ Ok:
         - "}"
   - Rule:
       - cur_line: 9
-        cur_pos: 0
-      - - "\""
-        - " "
-        - s
-        - t
-        - a
-        - r
-        - t
-        - s
-        - "\""
-      - - "{"
-        - " "
-        - /
-        - "*"
-        - " "
-        - P
-        - a
-        - t
-        - t
-        - e
-        - r
-        - n
-        - " "
-        - s
-        - t
-        - a
-        - r
-        - t
-        - s
-        - " "
-        - w
-        - i
-        - t
-        - h
-        - " "
-        - s
-        - p
-        - a
-        - c
-        - e
-        - " "
-        - "*"
-        - /
-        - " "
-        - "}"
-  - Rule:
-      - cur_line: 10
         cur_pos: 0
       - - "\\"
         - " "
@@ -543,5 +480,5 @@ Ok:
         - " "
         - "}"
   - PercentPercent:
-      cur_line: 11
+      cur_line: 10
       cur_pos: 0

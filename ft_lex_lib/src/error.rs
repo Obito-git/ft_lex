@@ -16,6 +16,7 @@ pub enum LexErrorKind {
     UnbalancedBrackets,
     UnexpectedToken { token: String, msg: String },
     CodeBlockAfterRulesDetected { first_rule: CursorPosition },
+    CodeLineAfterRulesDetected { first_rule: CursorPosition },
     NoSeparatorsFound,
     Internal(String),
 }

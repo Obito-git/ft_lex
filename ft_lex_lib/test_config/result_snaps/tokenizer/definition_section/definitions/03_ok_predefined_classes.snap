@@ -1,0 +1,444 @@
+---
+source: ft_lex_lib/src/tokenizer/mod.rs
+expression: result
+---
+Ok:
+  - Definition:
+      - cur_line: 1
+        cur_pos: 0
+      - - D
+        - I
+        - G
+        - I
+        - T
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - d
+        - i
+        - g
+        - i
+        - t
+        - ":"
+        - "]"
+        - "]"
+  - Definition:
+      - cur_line: 2
+        cur_pos: 0
+      - - A
+        - L
+        - P
+        - H
+        - A
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - a
+        - l
+        - p
+        - h
+        - a
+        - ":"
+        - "]"
+        - "]"
+  - Definition:
+      - cur_line: 3
+        cur_pos: 0
+      - - A
+        - L
+        - N
+        - U
+        - M
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - a
+        - l
+        - n
+        - u
+        - m
+        - ":"
+        - "]"
+        - "]"
+  - Definition:
+      - cur_line: 4
+        cur_pos: 0
+      - - X
+        - D
+        - I
+        - G
+        - I
+        - T
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - x
+        - d
+        - i
+        - g
+        - i
+        - t
+        - ":"
+        - "]"
+        - "]"
+  - Definition:
+      - cur_line: 5
+        cur_pos: 0
+      - - S
+        - P
+        - A
+        - C
+        - E
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - s
+        - p
+        - a
+        - c
+        - e
+        - ":"
+        - "]"
+        - "]"
+        - " "
+        - " "
+        - /
+        - "*"
+        - " "
+        - I
+        - n
+        - c
+        - l
+        - u
+        - d
+        - e
+        - s
+        - " "
+        - "\\"
+        - n
+        - ","
+        - " "
+        - u
+        - n
+        - l
+        - i
+        - k
+        - e
+        - " "
+        - W
+        - H
+        - I
+        - T
+        - E
+        - S
+        - P
+        - A
+        - C
+        - E
+        - " "
+        - a
+        - b
+        - o
+        - v
+        - e
+        - " "
+        - "*"
+        - /
+  - Definition:
+      - cur_line: 6
+        cur_pos: 0
+      - - B
+        - L
+        - A
+        - N
+        - K
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - b
+        - l
+        - a
+        - n
+        - k
+        - ":"
+        - "]"
+        - "]"
+        - " "
+        - " "
+        - /
+        - "*"
+        - " "
+        - S
+        - p
+        - a
+        - c
+        - e
+        - " "
+        - a
+        - n
+        - d
+        - " "
+        - t
+        - a
+        - b
+        - " "
+        - "*"
+        - /
+  - Definition:
+      - cur_line: 7
+        cur_pos: 0
+      - - P
+        - R
+        - I
+        - N
+        - T
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - p
+        - r
+        - i
+        - n
+        - t
+        - ":"
+        - "]"
+        - "]"
+        - " "
+        - " "
+        - /
+        - "*"
+        - " "
+        - P
+        - r
+        - i
+        - n
+        - t
+        - a
+        - b
+        - l
+        - e
+        - " "
+        - c
+        - h
+        - a
+        - r
+        - a
+        - c
+        - t
+        - e
+        - r
+        - s
+        - ","
+        - " "
+        - i
+        - n
+        - c
+        - l
+        - u
+        - d
+        - i
+        - n
+        - g
+        - " "
+        - s
+        - p
+        - a
+        - c
+        - e
+        - " "
+        - "*"
+        - /
+  - Definition:
+      - cur_line: 8
+        cur_pos: 0
+      - - G
+        - R
+        - A
+        - P
+        - H
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - g
+        - r
+        - a
+        - p
+        - h
+        - ":"
+        - "]"
+        - "]"
+        - " "
+        - " "
+        - /
+        - "*"
+        - " "
+        - P
+        - r
+        - i
+        - n
+        - t
+        - a
+        - b
+        - l
+        - e
+        - " "
+        - c
+        - h
+        - a
+        - r
+        - a
+        - c
+        - t
+        - e
+        - r
+        - s
+        - ","
+        - " "
+        - e
+        - x
+        - c
+        - l
+        - u
+        - d
+        - i
+        - n
+        - g
+        - " "
+        - s
+        - p
+        - a
+        - c
+        - e
+        - " "
+        - "*"
+        - /
+  - Definition:
+      - cur_line: 9
+        cur_pos: 0
+      - - U
+        - P
+        - P
+        - E
+        - R
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - u
+        - p
+        - p
+        - e
+        - r
+        - ":"
+        - "]"
+        - "]"
+  - Definition:
+      - cur_line: 10
+        cur_pos: 0
+      - - L
+        - O
+        - W
+        - E
+        - R
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - l
+        - o
+        - w
+        - e
+        - r
+        - ":"
+        - "]"
+        - "]"
+  - Definition:
+      - cur_line: 11
+        cur_pos: 0
+      - - P
+        - U
+        - N
+        - C
+        - T
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - p
+        - u
+        - n
+        - c
+        - t
+        - ":"
+        - "]"
+        - "]"
+  - Definition:
+      - cur_line: 12
+        cur_pos: 0
+      - - C
+        - N
+        - T
+        - R
+        - L
+        - _
+        - P
+        - O
+        - S
+      - - "["
+        - "["
+        - ":"
+        - c
+        - n
+        - t
+        - r
+        - l
+        - ":"
+        - "]"
+        - "]"
+  - PercentPercent:
+      cur_line: 13
+      cur_pos: 0
+  - PercentPercent:
+      cur_line: 14
+      cur_pos: 0

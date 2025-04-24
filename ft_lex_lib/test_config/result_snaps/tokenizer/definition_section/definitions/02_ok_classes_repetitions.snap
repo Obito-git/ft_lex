@@ -1,0 +1,220 @@
+---
+source: ft_lex_lib/src/tokenizer/mod.rs
+expression: result
+---
+Ok:
+  - Definition:
+      - cur_line: 1
+        cur_pos: 0
+      - - I
+        - N
+        - T
+        - E
+        - G
+        - E
+        - R
+      - - "{"
+        - D
+        - I
+        - G
+        - I
+        - T
+        - "}"
+        - +
+  - Definition:
+      - cur_line: 2
+        cur_pos: 0
+      - - F
+        - L
+        - O
+        - A
+        - T
+      - - "{"
+        - D
+        - I
+        - G
+        - I
+        - T
+        - "}"
+        - +
+        - "\\"
+        - "."
+        - "{"
+        - D
+        - I
+        - G
+        - I
+        - T
+        - "}"
+        - "*"
+        - " "
+        - "|"
+        - " "
+        - "{"
+        - D
+        - I
+        - G
+        - I
+        - T
+        - "}"
+        - "*"
+        - "\\"
+        - "."
+        - "{"
+        - D
+        - I
+        - G
+        - I
+        - T
+        - "}"
+        - +
+  - Definition:
+      - cur_line: 3
+        cur_pos: 0
+      - - N
+        - U
+        - M
+        - B
+        - E
+        - R
+      - - "{"
+        - I
+        - N
+        - T
+        - E
+        - G
+        - E
+        - R
+        - "}"
+        - "|"
+        - "{"
+        - F
+        - L
+        - O
+        - A
+        - T
+        - "}"
+  - Definition:
+      - cur_line: 4
+        cur_pos: 0
+      - - I
+        - D
+        - E
+        - N
+        - T
+        - I
+        - F
+        - I
+        - E
+        - R
+      - - "{"
+        - L
+        - E
+        - T
+        - T
+        - E
+        - R
+        - "}"
+        - (
+        - "{"
+        - L
+        - E
+        - T
+        - T
+        - E
+        - R
+        - "}"
+        - "|"
+        - "{"
+        - D
+        - I
+        - G
+        - I
+        - T
+        - "}"
+        - "|"
+        - "{"
+        - U
+        - N
+        - D
+        - E
+        - R
+        - S
+        - C
+        - O
+        - R
+        - E
+        - "}"
+        - )
+        - "*"
+  - Definition:
+      - cur_line: 5
+        cur_pos: 0
+      - - H
+        - E
+        - X
+        - N
+        - U
+        - M
+      - - "0"
+        - "["
+        - x
+        - X
+        - "]"
+        - "{"
+        - H
+        - E
+        - X
+        - D
+        - I
+        - G
+        - I
+        - T
+        - "}"
+        - +
+  - Definition:
+      - cur_line: 6
+        cur_pos: 0
+      - - O
+        - C
+        - T
+        - A
+        - L
+        - N
+        - U
+        - M
+      - - "0"
+        - "["
+        - "0"
+        - "-"
+        - "7"
+        - "]"
+        - +
+  - Definition:
+      - cur_line: 7
+        cur_pos: 0
+      - - B
+        - I
+        - N
+        - A
+        - R
+        - Y
+        - N
+        - U
+        - M
+      - - "0"
+        - "["
+        - b
+        - B
+        - "]"
+        - "["
+        - "0"
+        - "1"
+        - "]"
+        - +
+  - PercentPercent:
+      cur_line: 8
+      cur_pos: 0
+  - PercentPercent:
+      cur_line: 9
+      cur_pos: 0

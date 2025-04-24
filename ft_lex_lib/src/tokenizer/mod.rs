@@ -53,7 +53,7 @@ impl<'a> LexFileTokenizer<'a> {
         }
     }
 
-    // TODO: change name? every other fn starts with read_ pushes token, but this one returns data
+    // TODO: not related to this fn, but I'll write it here. Need to find out if each LexErrorKind is tested
     fn read_c_code_block(&mut self, block_type: CCodeBlockType) -> Result<Vec<char>, LexError> {
         let mut is_str_mode = false;
         let cursor_pos = self.cursor.get_position();
@@ -84,7 +84,7 @@ impl<'a> LexFileTokenizer<'a> {
                     continue;
                 }
                 (Some('/'), Some('*')) if !is_str_mode => {
-                    res.append(&mut self.read_multi_line_comment()?);
+                    res.append(&mut self.read_c_multi_line_comment()?);
                     continue;
                 }
                 (_, _) => {}
@@ -169,16 +169,12 @@ impl<'a> LexFileTokenizer<'a> {
         Ok(res)
     }
 
+    // It reads regex like expressions, but doesn't validate it. It is done on parsing level
     fn read_regex_like_expression(&mut self) -> Result<Vec<char>, LexError> {
-        let mut key = Vec::with_capacity(4);
-        //TODO: review carefully when parantesses
-        //TODO: review carefully when [] ][ are escaped for regex
-
-        //TODO: test good {}
+        let mut key = Vec::with_capacity(16);
         let mut delimiter_stack = Vec::with_capacity(8);
         let start_position = self.cursor.get_position();
 
-        // It reads regex like expressions, but doesn't validate it. It is done on parsing level
         while let Some(&c) = self.cursor.peek() {
             let current_delimiter = delimiter_stack.last().cloned();
             match c {
@@ -242,8 +238,7 @@ impl<'a> LexFileTokenizer<'a> {
         }
     }
 
-    //TODO: handle unclosed code block }
-    fn read_pair(&mut self) -> Result<Pair, LexError> {
+    fn read_rule(&mut self) -> Result<Pair, LexError> {
         let start_position = self.cursor.get_position();
 
         let key = self.read_regex_like_expression()?;
@@ -255,14 +250,20 @@ impl<'a> LexFileTokenizer<'a> {
                 self.cursor.next_until_end_of_line()
             }
         };
-        //TODO: check this one, not sure now where value finishes
-        self.cursor.skip_spaces_and_tabs();
         Ok((start_position, key, value))
     }
 
-    // TODO: change name? every other fn starts with read_ pushes token, but this one returns data
-    fn read_multi_line_comment(&mut self) -> Result<Vec<char>, LexError> {
-        let mut buffer = Vec::with_capacity(16);
+    fn read_definition(&mut self) -> Result<Pair, LexError> {
+        let start_position = self.cursor.get_position();
+
+        let key = self.read_regex_like_expression()?;
+        self.cursor.skip_spaces_and_tabs();
+        let value = self.cursor.next_until_end_of_line();
+        Ok((start_position, key, value))
+    }
+
+    fn read_c_multi_line_comment(&mut self) -> Result<Vec<char>, LexError> {
+        let mut buffer = Vec::with_capacity(32);
         let pos = self.cursor.get_position();
 
         if self.cursor.peek_two() != ((Some('/'), Some('*'))) {
@@ -303,7 +304,7 @@ impl<'a> LexFileTokenizer<'a> {
         Ok(())
     }
 
-    fn read_first_section(&mut self) -> Result<(), LexError> {
+    fn tokenize_first_section(&mut self) -> Result<(), LexError> {
         loop {
             self.cursor.skip_white_spaces();
             let cursor_is_on_line_beginning = self.cursor.is_on_line_beginning();
@@ -318,12 +319,12 @@ impl<'a> LexFileTokenizer<'a> {
                     break;
                 }
                 (Some('/'), Some('*')) => {
-                    let mut comment = self.read_multi_line_comment()?;
+                    let mut comment = self.read_c_multi_line_comment()?;
                     comment.extend(self.cursor.next_until_end_of_line());
                     self.res.push(Token::MultilineComment(cursor_pos, comment));
                 }
                 (Some(_), _) if cursor_is_on_line_beginning => {
-                    let (pos, key, value) = self.read_pair()?;
+                    let (pos, key, value) = self.read_definition()?;
                     self.res.push(Token::Definition(pos, key, value))
                 }
                 (Some(_), _) if !cursor_is_on_line_beginning => self.res.push(Token::CodeBlock(
@@ -336,7 +337,7 @@ impl<'a> LexFileTokenizer<'a> {
         Ok(())
     }
 
-    fn read_second_section(&mut self) -> Result<(), LexError> {
+    fn tokenize_second_section(&mut self) -> Result<(), LexError> {
         let mut first_rule = None;
         loop {
             self.cursor.skip_white_spaces();
@@ -381,7 +382,7 @@ impl<'a> LexFileTokenizer<'a> {
                     self.cursor.next_until_end_of_line(),
                 ));
             } else {
-                let (pos, key, value) = self.read_pair()?;
+                let (pos, key, value) = self.read_rule()?;
                 self.res.push(Token::Rule(pos, key, value));
                 if first_rule.is_none() {
                     first_rule = Some(pos);
@@ -392,8 +393,8 @@ impl<'a> LexFileTokenizer<'a> {
     }
 
     fn start(&mut self) -> Result<(), LexError> {
-        self.read_first_section()?;
-        self.read_second_section()?;
+        self.tokenize_first_section()?;
+        self.tokenize_second_section()?;
 
         self.cursor.skip_white_spaces();
 

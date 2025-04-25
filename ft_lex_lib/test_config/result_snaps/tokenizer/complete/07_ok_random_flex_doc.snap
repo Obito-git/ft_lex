@@ -95,8 +95,8 @@ Ok:
   - CodeBlock:
       - cur_line: 7
         cur_pos: 0
-      - - "{"
-        - "%"
+      - - "%"
+        - "{"
         - "\n"
         - "#"
         - d

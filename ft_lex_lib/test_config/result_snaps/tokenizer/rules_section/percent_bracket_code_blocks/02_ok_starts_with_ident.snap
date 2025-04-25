@@ -9,8 +9,8 @@ Ok:
   - CodeBlock:
       - cur_line: 4
         cur_pos: 4
-      - - "{"
-        - "%"
+      - - "%"
+        - "{"
         - "\n"
         - " "
         - " "

@@ -6,8 +6,8 @@ Ok:
   - CodeBlock:
       - cur_line: 1
         cur_pos: 0
-      - - "{"
-        - "%"
+      - - "%"
+        - "{"
         - "\n"
         - u
         - n

@@ -16,8 +16,8 @@ pub enum Token {
     MultilineComment(CursorPosition, Vec<char>),
 }
 
-enum CCodeBlockType {
-    Regular,
+enum CodeBlockType {
+    C,
     Lex,
 }
 
@@ -61,23 +61,35 @@ impl<'a> LexFileTokenizer<'a> {
         }
     }
 
-    // TODO: not related to this fn, but I'll write it here. Need to find out if each LexErrorKind is tested
-    fn read_c_code_block(&mut self, block_type: CCodeBlockType) -> Result<Vec<char>, LexError> {
+    fn read_code_block_internal(
+        &mut self,
+        block_type: CodeBlockType,
+    ) -> Result<Vec<char>, LexError> {
         let mut is_str_mode = false;
-        let cursor_pos = self.cursor.get_position();
+        let start_pos = self.cursor.get_position();
         let mut res = Vec::with_capacity(32);
         let mut bracket_depth = 1;
 
         match block_type {
-            CCodeBlockType::Regular => {
-                self.cursor.next();
+            CodeBlockType::C => {
+                if self.cursor.next() != Some('{') {
+                    return Err(LexError::new(
+                        LexErrorKind::Internal("Expected '{' to start C block".to_string()),
+                        start_pos,
+                    ));
+                }
                 res.push('{');
             }
-            CCodeBlockType::Lex => {
-                self.cursor.next();
-                self.cursor.next();
-                res.push('{');
-                res.push('%');
+            CodeBlockType::Lex => {
+                if let (Some('%'), Some('{')) = (self.cursor.next(), self.cursor.next()) {
+                    res.push('%');
+                    res.push('{');
+                } else {
+                    return Err(LexError::new(
+                        LexErrorKind::Internal("Expected '{%' to start Lex block".to_string()),
+                        start_pos,
+                    ));
+                }
             }
         }
 
@@ -85,7 +97,6 @@ impl<'a> LexFileTokenizer<'a> {
             let current_char_pos = self.cursor.get_position();
             let next_char = self.cursor.peek().cloned();
 
-            //TODO: check how lex behaves with comment after }
             match self.cursor.peek_two() {
                 (Some('/'), Some('/')) if !is_str_mode => {
                     res.append(&mut self.cursor.next_until_end_of_line());
@@ -104,7 +115,6 @@ impl<'a> LexFileTokenizer<'a> {
                     res.push('"');
                     is_str_mode = !is_str_mode;
                 }
-                //TODO: test if action ends with "something/(EOF)
                 Some('\\') if is_str_mode => {
                     self.cursor.next();
                     res.push('\\');
@@ -118,43 +128,10 @@ impl<'a> LexFileTokenizer<'a> {
                     res.push('{');
                     bracket_depth += 1;
                 }
-                //TODO: looks like shit
                 Some('}') if !is_str_mode => {
+                    self.cursor.next();
+                    res.push('}');
                     bracket_depth -= 1;
-                    if bracket_depth == 0 {
-                        match block_type {
-                            CCodeBlockType::Regular => {
-                                res.append(&mut self.cursor.next_until_end_of_line());
-                                self.cursor.next();
-                            }
-                            CCodeBlockType::Lex => {
-                                if let Some(&c) = res.last() {
-                                    if res.last() != Some(&'%') {
-                                        return Err(LexError::new(
-                                            LexErrorKind::UnexpectedToken {
-                                                token: format!("{c}}}"),
-                                                msg: "The right sequence to close code block is \"%}\"".to_string(),
-                                            },
-                                            current_char_pos.prev(),
-                                        ));
-                                    }
-                                    self.cursor.next();
-                                    res.push('}');
-                                    self.cursor.skip_spaces_and_tabs();
-                                    self.assert_next_is_newline()?;
-                                } else {
-                                    return Err(LexError::new(
-                                        LexErrorKind::Internal("TODO: ".to_string()),
-                                        current_char_pos,
-                                    ));
-                                }
-                            }
-                        }
-                        break;
-                    } else {
-                        self.cursor.next();
-                        res.push('}');
-                    }
                 }
                 Some(c) => {
                     self.cursor.next();
@@ -164,17 +141,46 @@ impl<'a> LexFileTokenizer<'a> {
                     if bracket_depth != 0 {
                         return Err(LexError::new(
                             LexErrorKind::UnterminatedCodeBlock,
-                            cursor_pos,
+                            start_pos,
                         ));
-                    }
-                    if is_str_mode {
-                        return Err(LexError::new(LexErrorKind::UnterminatedString, cursor_pos));
                     }
                     break;
                 }
             }
+            if bracket_depth == 0 {
+                match block_type {
+                    CodeBlockType::C => {
+                        res.append(&mut self.cursor.next_until_end_of_line());
+                        self.cursor.next();
+                    }
+                    CodeBlockType::Lex => {
+                        let last_two = res.iter().rev().take(2).rev().copied().collect::<Vec<_>>();
+                        if last_two != vec!['%', '}'] {
+                            return Err(LexError::new(
+                                LexErrorKind::UnexpectedToken {
+                                    token: format!("{}", last_two.iter().collect::<String>()),
+                                    msg: "The right sequence to close code block is \"%}\""
+                                        .to_string(),
+                                },
+                                current_char_pos.prev(),
+                            ));
+                        }
+                        self.cursor.skip_spaces_and_tabs();
+                        self.assert_next_is_newline()?;
+                    }
+                }
+                break;
+            }
         }
         Ok(res)
+    }
+
+    fn read_c_code_block(&mut self) -> Result<Vec<char>, LexError> {
+        self.read_code_block_internal(CodeBlockType::C)
+    }
+
+    fn read_lex_code_block(&mut self) -> Result<Vec<char>, LexError> {
+        self.read_code_block_internal(CodeBlockType::Lex)
     }
 
     // It reads regex like expressions, but doesn't validate it. It is done on parsing level
@@ -236,6 +242,7 @@ impl<'a> LexFileTokenizer<'a> {
                 }
             }
         }
+        // probably unreachable, but I'll keep just in case
         if !delimiter_stack.is_empty() {
             Err(LexError::new(
                 LexErrorKind::UnbalancedBrackets,
@@ -253,7 +260,7 @@ impl<'a> LexFileTokenizer<'a> {
         self.cursor.skip_spaces_and_tabs();
         let value = {
             if self.cursor.peek() == Some(&'{') {
-                self.read_c_code_block(CCodeBlockType::Regular)?
+                self.read_c_code_block()?
             } else {
                 self.cursor.next_until_end_of_line()
             }
@@ -319,7 +326,7 @@ impl<'a> LexFileTokenizer<'a> {
             let cursor_pos = self.cursor.get_position();
             match self.cursor.peek_two() {
                 (Some('%'), Some('{')) => {
-                    let code = self.read_c_code_block(CCodeBlockType::Lex)?;
+                    let code = self.read_lex_code_block()?;
                     self.res.push(Token::CodeBlock(cursor_pos, code))
                 }
                 (Some('%'), Some('%')) => {
@@ -371,7 +378,7 @@ impl<'a> LexFileTokenizer<'a> {
                         cursor_pos,
                     ));
                 }
-                let code = self.read_c_code_block(CCodeBlockType::Lex)?;
+                let code = self.read_lex_code_block()?;
                 self.res.push(Token::CodeBlock(cursor_pos, code));
                 continue;
             }

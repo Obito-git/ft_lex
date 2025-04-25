@@ -9,8 +9,8 @@ Ok:
   - CodeBlock:
       - cur_line: 3
         cur_pos: 0
-      - - "{"
-        - "%"
+      - - "%"
+        - "{"
         - "\n"
         - " "
         - " "
@@ -48,8 +48,8 @@ Ok:
   - CodeBlock:
       - cur_line: 7
         cur_pos: 0
-      - - "{"
-        - "%"
+      - - "%"
+        - "{"
         - "\n"
         - " "
         - " "
@@ -87,8 +87,8 @@ Ok:
   - CodeBlock:
       - cur_line: 11
         cur_pos: 0
-      - - "{"
-        - "%"
+      - - "%"
+        - "{"
         - "\n"
         - " "
         - " "

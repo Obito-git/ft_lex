@@ -81,8 +81,8 @@ Ok:
   - CodeBlock:
       - cur_line: 3
         cur_pos: 0
-      - - "{"
-        - "%"
+      - - "%"
+        - "{"
         - "\n"
         - "#"
         - i

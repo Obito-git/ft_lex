@@ -8,10 +8,7 @@ pub enum LexErrorKind {
     NewLineExpected,
     UnterminatedCommentBlock,
     UnterminatedCodeBlock,
-    UnterminatedString,
-    UnterminatedToken, // TODO change name?
     UnexpectedEscapedChar(Option<char>),
-    UnmatchedBracket(char, char),
     UnbalancedBrackets,
     UnexpectedToken { token: String, msg: String },
     CodeBlockAfterRulesDetected { first_rule: CursorPosition },

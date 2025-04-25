@@ -4,7 +4,7 @@ expression: result
 ---
 Err:
   kind:
-    UnexpectedEscapedChar: ~
+    UnexpectedEscapedChar: "\n"
   position:
     cur_line: 3
-    cur_pos: 0
+    cur_pos: 26

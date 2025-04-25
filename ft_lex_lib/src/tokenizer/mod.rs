@@ -53,6 +53,14 @@ impl<'a> LexFileTokenizer<'a> {
         }
     }
 
+    fn read_escaped_char(&mut self) -> Result<char, LexErrorKind> {
+        match self.cursor.next() {
+            Some('\n') => Err(LexErrorKind::UnexpectedEscapedChar(Some('\n'))),
+            None => Err(LexErrorKind::UnexpectedEscapedChar(None)),
+            Some(c) => Ok(c),
+        }
+    }
+
     // TODO: not related to this fn, but I'll write it here. Need to find out if each LexErrorKind is tested
     fn read_c_code_block(&mut self, block_type: CCodeBlockType) -> Result<Vec<char>, LexError> {
         let mut is_str_mode = false;
@@ -100,10 +108,10 @@ impl<'a> LexFileTokenizer<'a> {
                 Some('\\') if is_str_mode => {
                     self.cursor.next();
                     res.push('\\');
-                    res.push(self.cursor.next().ok_or(LexError::new(
-                        LexErrorKind::UnexpectedEndOfInputAfterEscape,
-                        current_char_pos,
-                    ))?);
+                    res.push(
+                        self.read_escaped_char()
+                            .map_err(|e| LexError::new(e, current_char_pos))?,
+                    );
                 }
                 Some('{') if !is_str_mode => {
                     self.cursor.next();
@@ -181,10 +189,10 @@ impl<'a> LexFileTokenizer<'a> {
                 '\\' => {
                     self.cursor.next();
                     key.push('\\');
-                    key.push(self.cursor.next().ok_or(LexError::new(
-                        LexErrorKind::UnexpectedEndOfInputAfterEscape,
-                        start_position,
-                    ))?);
+                    key.push(
+                        self.read_escaped_char()
+                            .map_err(|e| LexError::new(e, start_position))?,
+                    );
                 }
                 _ if current_delimiter == Some('[') => {
                     self.cursor.next();

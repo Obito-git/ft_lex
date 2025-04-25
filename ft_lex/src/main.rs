@@ -15,9 +15,6 @@ pub fn format_lex_error(error: &LexError, source: &str, filename: String) -> Str
         LexErrorKind::NewLineExpected => {
             message.push_str("Error: Expected a newline character");
         }
-        LexErrorKind::UnrecognizedPercentSequence(seq) => {
-            message.push_str(&format!("Error: Unrecognized sequence '%{}'", seq));
-        }
         LexErrorKind::Internal(msg) => {
             message.push_str(&format!("Internal Lexer Error: {}", msg));
             return message;

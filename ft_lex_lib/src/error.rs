@@ -6,12 +6,11 @@ use serde::Serialize;
 #[cfg_attr(test, derive(Serialize))]
 pub enum LexErrorKind {
     NewLineExpected,
-    UnrecognizedPercentSequence(String),
     UnterminatedCommentBlock,
     UnterminatedCodeBlock,
     UnterminatedString,
     UnterminatedToken, // TODO change name?
-    UnexpectedEndOfInputAfterEscape,
+    UnexpectedEscapedChar(Option<char>),
     UnmatchedBracket(char, char),
     UnbalancedBrackets,
     UnexpectedToken { token: String, msg: String },

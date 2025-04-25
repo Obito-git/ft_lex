@@ -455,12 +455,8 @@ mod tests {
     const SNAPSHOT_BASE_FOLDER: &str = "../../test_config/result_snaps/tokenizer/";
 
     lazy_static! {
-        // Regex creation isn't very cheap, so creating it once with lazy static
         static ref test_file_name: Regex = Regex::new(TEST_CONFIG_FILENAME_REGEX).unwrap();
     }
-
-    //TODO: test spaces and tabs after code block
-    //TODO: test error when any line starts with whitespace
 
     /// Splits related path to the conf file to path and file name.
     /// # Arguments

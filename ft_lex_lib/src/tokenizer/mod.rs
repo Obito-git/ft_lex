@@ -14,6 +14,7 @@ pub enum Token {
     Definition(CursorPosition, Vec<char>, Vec<char>),
     Rule(CursorPosition, Vec<char>, Vec<char>),
     MultilineComment(CursorPosition, Vec<char>),
+    EndCodeBlock(CursorPosition, Vec<char>),
 }
 
 enum CodeBlockType {
@@ -417,7 +418,7 @@ impl<'a> LexFileTokenizer<'a> {
         let code_block_position = self.cursor.get_position();
         let rest = self.cursor.collect();
         if !rest.is_empty() {
-            self.res.push(Token::CodeBlock(code_block_position, rest));
+            self.res.push(Token::EndCodeBlock(code_block_position, rest));
         }
         if self.percent_percent_count == 0 {
             Err(LexError::new_general(LexErrorKind::NoSeparatorsFound))

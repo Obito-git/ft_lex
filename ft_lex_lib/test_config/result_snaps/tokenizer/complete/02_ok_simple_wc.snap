@@ -222,7 +222,7 @@ Ok:
   - PercentPercent:
       cur_line: 13
       cur_pos: 0
-  - CodeBlock:
+  - EndCodeBlock:
       - cur_line: 14
         cur_pos: 0
       - - i

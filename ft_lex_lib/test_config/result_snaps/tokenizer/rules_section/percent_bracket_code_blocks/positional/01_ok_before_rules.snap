@@ -164,7 +164,7 @@ Ok:
   - PercentPercent:
       cur_line: 9
       cur_pos: 0
-  - CodeBlock:
+  - EndCodeBlock:
       - cur_line: 10
         cur_pos: 0
       - - i

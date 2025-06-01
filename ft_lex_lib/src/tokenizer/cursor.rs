@@ -19,7 +19,7 @@ impl CursorPosition {
     pub fn new(cur_line: usize, cur_pos: usize) -> Self {
         CursorPosition { cur_line, cur_pos }
     }
-    
+
     pub fn prev(&self) -> Self {
         CursorPosition {
             cur_line: self.cur_line,
@@ -94,7 +94,6 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn collect(&mut self) -> Vec<char> {
-        //TODO: clone iter is ok, right?
         self.data.clone().collect()
     }
 

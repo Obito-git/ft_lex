@@ -10,7 +10,7 @@
 - [ ] Doc comments for everything where it makes sense.
 - [ ] libl should exist and be named libl (TODO ???)
 - [x] Write this description with details and steps.
-- [x] Draw and maintain the project scheme.
+- [ ] Draw and maintain the project schemas.
 - [x] Tokenizer
     - [x] Make up a way to efficiently test different configurations
     - [x] Handles only basic parsing related to tokens, but not validate the logic (sequances, regex validation etc).
@@ -54,6 +54,8 @@ Lex is a computer program that generates lexical analyzers ("scanners" or "lexer
 
 Lex reads an input stream specifying the lexical analyzer and writes source code which implements the lexical analyzer in the C programming language. **Our version can generate source in rust as well.**
 
+### Basic usage example
+
 ### Main points
 
 section definition lexical analyse (tokenization):
@@ -72,9 +74,9 @@ The action taken by lex when encountering any input beginning with a <blank> or 
 ## Schema
 
 ### Project
-### Tokenizer test
-### Parser test
-### End-to-end test
+### Tests
+
+![workflow](docs/test_schema.png)
 
 ## Dev dependencies
 insta:

@@ -418,7 +418,8 @@ impl<'a> LexFileTokenizer<'a> {
         let code_block_position = self.cursor.get_position();
         let rest = self.cursor.collect();
         if !rest.is_empty() {
-            self.res.push(Token::EndCodeBlock(code_block_position, rest));
+            self.res
+                .push(Token::EndCodeBlock(code_block_position, rest));
         }
         if self.percent_percent_count == 0 {
             Err(LexError::new_general(LexErrorKind::NoSeparatorsFound))
@@ -453,7 +454,7 @@ mod tests {
 
     const BASE_DIR: &str = "test_config/tokenizer/";
     const TEST_CONFIG_FILENAME_REGEX: &str = r"^\d{2}_(ok|err)_.+\.l\.example$";
-    const SNAPSHOT_BASE_FOLDER: &str = "../../test_config/result_snaps/tokenizer/";
+    const SNAPSHOT_BASE_FOLDER: &str = "../../../test_config/result_snaps/tokenizer/";
 
     lazy_static! {
         static ref test_file_name: Regex = Regex::new(TEST_CONFIG_FILENAME_REGEX).unwrap();
@@ -524,7 +525,7 @@ mod tests {
     /// accepted `.snap` file.
     #[rstest]
     #[timeout(Duration::from_secs(1))]
-    fn load_lex_configuration_files(#[files("test_config/tokenizer/**/*")] path: PathBuf) {
+    fn load_lex_configuration_files(#[files("../test_config/tokenizer/**/*")] path: PathBuf) {
         // given
         let input_content = fs::read_to_string(&path)
             .unwrap_or_else(|err| panic!("Error: Can't read input {:?}: {}", path, err));

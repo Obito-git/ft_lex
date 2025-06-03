@@ -19,6 +19,7 @@ Terminology:
 - [ ] Implement a set of libraries to be used in the current and next projects (yacc and c compiler)
     - [ ] command line argument parser
     - [ ] regex
+        - [ ] write doc and define the scope
         - [ ] pattern is parsed to AST
         - [ ] AST transformed to the NFA
         - [ ] NFA transformed to the DTA

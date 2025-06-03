@@ -1,0 +1,9 @@
+[package]
+name = "regex"
+version = "0.1.0"
+edition = "2024"
+
+[dev-dependencies]
+rstest = "0.25.0"
+insta = { version = "1.42.2", features = ["yaml"] }
+serde = { version = "1.0.219", features = ["derive"] }

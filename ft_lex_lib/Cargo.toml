@@ -10,5 +10,6 @@ serde = { version = "1.0.219", features = ["derive"] }
 regex = "1.11.1"
 lazy_static = "1.5.0"
 
+#TODO: change branch to the original rstest crate with merged changes
 #rstest = "0.25.0"
 rstest = {git = "https://github.com/Obito-git/rstest.git", branch = "306_ignore_folders"}

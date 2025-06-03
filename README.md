@@ -2,15 +2,31 @@
 
 
 ## Current state / Implementation plan
+
+Terminology:
+- Nondeterministic Finite Automaton - NFA
+- Deterministic Finite Automaton - DFA
+
 - [x] No dependencies or any external libraries (only the dev ones, that are not included in release, for testing purposes)
+- [ ] Write this description with details and steps.
+- [ ] Draw and maintain the project schemas.
 - [ ] Zero unwrap policy
 - [ ] Zero warnings policy
-- [ ] Structs, modules and functions fully respect encapsulation
+- [ ] Structs, modules, functions and libs fully respect encapsulation
 - [ ] The core part of the lexer is a library
 - [ ] Doc comments for everything where it makes sense.
 - [ ] libl should exist and be named libl (TODO ???)
-- [x] Write this description with details and steps.
-- [ ] Draw and maintain the project schemas.
+- [ ] Implement a set of libraries to be used in the current and next projects (yacc and c compiler)
+    - [ ] command line argument parser
+    - [ ] regex
+        - [ ] pattern is parsed to AST
+        - [ ] AST transformed to the NFA
+        - [ ] NFA transformed to the DTA
+        - [ ] the regex is usable for regular needs
+        - [ ] the regex instance should store NFA
+        - [ ] is able to combine NFA later into "super" NFA
+        - [ ] can transform "super" NFA to the DFA
+        - [ ] fully tested
 - [x] Tokenizer
     - [x] Make up a way to efficiently test different configurations
     - [x] Handles only basic parsing related to tokens, but not validate the logic (sequances, regex validation etc).
@@ -21,10 +37,9 @@
     - [ ] Validation
         - [ ] Order
         - [ ] Right sequence
-        - [ ] Regex
         - [ ] Logic
     - [ ] Generates all parts of the target file
-        - [ ] Nondeterministic Finite Automaton (NFA)
+        - [ ] for regex use our `regex` lib to get NFAs, combine it and transform to DFA
         - [ ] NFA is transformed to the Deterministic Finite Automaton (DFA)
         - [ ] TODO: list the rest of the main parts of the generated file that should generated
     - [ ] Fully covered with tests

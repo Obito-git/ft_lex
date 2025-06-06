@@ -80,21 +80,21 @@ pub enum DefinedArg<'a> {
 }
 
 impl<'a> DefinedArg<'a> {
-    pub fn name(&self) -> String {
+    fn name(&self) -> String {
         match self {
             DefinedArg::Str(arg_type) => arg_type.name.clone(),
             DefinedArg::Bool(arg_type) => arg_type.name.clone(),
         }
     }
 
-    pub fn alias(&self) -> char {
+    fn alias(&self) -> char {
         match self {
             DefinedArg::Str(arg_type) => arg_type.alias,
             DefinedArg::Bool(arg_type) => arg_type.alias,
         }
     }
 
-    pub(crate) fn set_value(&mut self, value: String) -> Result<(), String> {
+    fn set_value(&mut self, value: String) -> Result<(), String> {
         match self {
             DefinedArg::Str(arg_type) => arg_type.value = Some(value),
             DefinedArg::Bool(arg_type) => todo!(),

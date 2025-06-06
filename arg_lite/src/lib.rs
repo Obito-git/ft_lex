@@ -119,57 +119,180 @@ impl<'a> DefinedArg<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ArgLite, ArgLiteErr, ArgType, DefinedArg};
+    use super::*;
 
-    #[test]
-    fn ambigous_arg_name() {
-        // given
-        let arg_name = "test".to_string();
-        let mut arg1 = ArgType {
-            name: arg_name.clone(),
-            alias: 't',
-            is_mandatory: true,
-            description: "Test arg desc".to_string(),
-            value: None,
-        };
-        let mut arg2 = ArgType {
-            name: arg_name.clone(),
-            alias: 'p',
-            is_mandatory: true,
-            description: "Test arg desc".to_string(),
-            value: None,
-        };
+    mod ambigous_values {
+        use super::*;
 
-        // when
-        let res = ArgLite::parse(
-            vec![DefinedArg::Str(&mut arg1), DefinedArg::Str(&mut arg2)],
-            vec![].into_iter(),
-        );
+        #[test]
+        fn ambigous_arg_name_expect_err() {
+            // given
+            let arg_name = "test".to_string();
+            let mut arg1 = ArgType {
+                name: arg_name.clone(),
+                alias: 't',
+                is_mandatory: true,
+                description: "Test arg desc".to_string(),
+                value: None,
+            };
+            let mut arg2 = ArgType {
+                name: arg_name.clone(),
+                alias: 'p',
+                is_mandatory: true,
+                description: "Test arg desc".to_string(),
+                value: None,
+            };
 
-        // then
-        assert_eq!(res, Err(ArgLiteErr::AmbigousName(arg_name)));
+            // when
+            let res = ArgLite::parse(
+                vec![DefinedArg::Str(&mut arg1), DefinedArg::Str(&mut arg2)],
+                vec![].into_iter(),
+            );
+
+            // then
+            assert_eq!(res, Err(ArgLiteErr::AmbigousName(arg_name)));
+        }
+
+        #[test]
+        fn ambigous_arg_alias_expect_err() {
+            // given
+            let arg_alias = 't';
+            let mut arg1 = ArgType {
+                name: "arg1".to_string(),
+                alias: arg_alias,
+                is_mandatory: true,
+                description: "Test arg desc".to_string(),
+                value: None,
+            };
+            let mut arg2 = ArgType {
+                name: "arg2".to_string(),
+                alias: arg_alias,
+                is_mandatory: true,
+                description: "Test arg desc".to_string(),
+                value: None,
+            };
+
+            // when
+            let res = ArgLite::parse(
+                vec![DefinedArg::Str(&mut arg1), DefinedArg::Str(&mut arg2)],
+                vec![].into_iter(),
+            );
+
+            // then
+            assert_eq!(res, Err(ArgLiteErr::AmbigousAlias(arg_alias)));
+        }
     }
+    mod mandatory_args {
+        use super::*;
 
-    //TODO: add multiple
-    #[test]
-    fn one_mandatory_arg_isnt_provided() {
-        // given
-        let arg_name = "test".to_string();
-        let mut arg1 = ArgType {
-            name: arg_name.clone(),
-            alias: 't',
-            is_mandatory: true,
-            description: "Test arg desc".to_string(),
-            value: None,
-        };
+        #[test]
+        fn one_mandatory_arg_isnt_provided_expect_err() {
+            // given
+            let arg_name = "test".to_string();
+            let mut mandatory_arg = ArgType {
+                name: arg_name.clone(),
+                alias: 't',
+                is_mandatory: true,
+                description: "Test arg desc".to_string(),
+                value: None,
+            };
 
-        // when
-        let res = ArgLite::parse(vec![DefinedArg::Str(&mut arg1)], vec![].into_iter());
+            // when
+            let res = ArgLite::parse(
+                vec![DefinedArg::Str(&mut mandatory_arg)],
+                vec![].into_iter(),
+            );
 
-        // then
-        assert_eq!(
-            res,
-            Err(ArgLiteErr::MandatoryArgIsntProvided(vec![arg_name]))
-        );
+            // then
+            assert_eq!(
+                res,
+                Err(ArgLiteErr::MandatoryArgIsntProvided(vec![arg_name]))
+            );
+        }
+
+        #[test]
+        fn zero_mandotory_should_ok() {
+            // given
+            let mut optional_arg = ArgType {
+                name: "arg".to_string(),
+                alias: 't',
+                is_mandatory: false,
+                description: "Test arg desc".to_string(),
+                value: None,
+            };
+
+            // when
+            let res = ArgLite::parse(
+                vec![DefinedArg::Bool(&mut optional_arg)],
+                vec![].into_iter(),
+            );
+
+            // then
+            assert!(res.is_ok())
+        }
+
+        #[test]
+        fn few_mandotory_should_expect_err() {
+            // given
+            let arg1_name = "arg1".to_string();
+            let arg2_name = "arg2".to_string();
+            let mut mandatory_arg1 = ArgType {
+                name: arg1_name.clone(),
+                alias: 't',
+                is_mandatory: true,
+                description: "Test arg desc".to_string(),
+                value: None,
+            };
+            let mut optional_arg = ArgType {
+                name: "arg3".to_string(),
+                alias: 'k',
+                is_mandatory: false,
+                description: "Test arg desc".to_string(),
+                value: None,
+            };
+            let mut mandatory_arg2 = ArgType {
+                name: arg2_name.clone(),
+                alias: 'o',
+                is_mandatory: true,
+                description: "Test arg desc".to_string(),
+                value: None,
+            };
+
+            // when
+            let res = ArgLite::parse(
+                vec![
+                    DefinedArg::Bool(&mut mandatory_arg1),
+                    DefinedArg::Str(&mut optional_arg),
+                    DefinedArg::Str(&mut mandatory_arg2),
+                ],
+                vec![].into_iter(),
+            );
+
+            // then
+            assert_eq!(
+                res,
+                Err(ArgLiteErr::MandatoryArgIsntProvided(vec![
+                    arg1_name, arg2_name
+                ]))
+            );
+        }
+
+        #[test]
+        fn mandotory_but_there_is_an_initial_val_should_ok() {
+            // given
+            let mut optional_arg = ArgType {
+                name: "arg".to_string(),
+                alias: 't',
+                is_mandatory: true,
+                description: "Test arg desc".to_string(),
+                value: Some("I'm mandatory but with val".to_string()),
+            };
+
+            // when
+            let res = ArgLite::parse(vec![DefinedArg::Str(&mut optional_arg)], vec![].into_iter());
+
+            // then
+            assert!(res.is_ok())
+        }
     }
 }

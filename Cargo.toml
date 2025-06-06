@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
 
-members = ["ft_lex_lib", "ft_lex", "regex"]
+members = ["ft_lex_lib", "ft_lex", "regex", "arg_lite"]

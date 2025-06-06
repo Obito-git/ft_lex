@@ -1,5 +1,13 @@
 # ft_lex
 
+## Crates
+
+Since it is forbidden by the project subject to use any external library, I should implement some basic features by myself:
+
+- `regex`: basic `extended regex` implementation, that exposes some internals that we can reuse for our pattern matching engine
+- `arg_lite`: basic command line argument parser
+- `ft_lex_lib`: the core part of our lex
+- `ft_lex`: executable
 
 ## Current state / Implementation plan
 
@@ -20,9 +28,11 @@ Terminology:
     - [ ] command line argument parser
     - [ ] regex
         - [ ] write doc and define the scope
+        - [ ] basic regex first (concatenation, alteration and Kleene star)
         - [ ] pattern is parsed to AST
         - [ ] AST transformed to the NFA
         - [ ] NFA transformed to the DTA
+        - [ ] extended regex
         - [ ] the regex is usable for regular needs
         - [ ] the regex instance should store NFA
         - [ ] is able to combine NFA later into "super" NFA
@@ -105,26 +115,5 @@ parametrized test:
 
  ## Other (Trash can TODO)
 
-https://www.youtube.com/watch?v=54bo1qaHAfk
+https://www.youtube.com/watch?v=54bo1qaHAfk - introduction to lex/yacc
 
-### REGEX:
-AST is built using Recursive Descent Parsing.
-### Resources:
-
-- https://en.wikipedia.org/wiki/Recursive_descent_parser
-- https://craftinginterpreters.com/parsing-expressions.html#recursive-descent-parsing
-
-### Notes
-
-### Parser is LL(1)
-- L (First L): Input is scanned from Left to right.
-- L (Second L): The parser produces a Leftmost derivation of the string according to the grammar.
-
-- (k): The parser uses k tokens of lookahead to make its parsing decisions (i.e., to predict which grammar rule to apply next).
-  - Crucially, our parser functions use .peek() to look at the next single token (k=1) to decide what to do:
-  - parse_factor peeks ahead one token to see if it's a Quantifier.
-  - parse_term peeks ahead one token to see if it can start another factor (for concatenation).
-  - parse_expression peeks ahead one token to see if it's a Pipe.
-
-REGEX + EXPRESSIONS: tokens to AST:
-https://craftinginterpreters.com/contents.html

@@ -3,4 +3,6 @@ name = "arg_lite"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[dev-dependencies]
+#rstest = "0.25.0"
+rstest = {git = "https://github.com/Obito-git/rstest.git", branch = "306_ignore_folders"}

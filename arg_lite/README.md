@@ -5,6 +5,7 @@ basic command line argument parser
 ## TODO
 
 - align naming for args (option, arg, defined arg etc.)
+- can I replace usage of string by something to match &str as well for simplicity?
 
 ## Scope
 

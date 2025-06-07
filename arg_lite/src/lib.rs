@@ -69,6 +69,7 @@ where
     pub name: String,
     pub alias: char,
     pub is_mandatory: bool,
+    pub is_flag: bool,
     pub description: String,
     pub value: Option<T>,
 }
@@ -131,6 +132,7 @@ mod tests {
             let mut arg1 = ArgType {
                 name: arg_name.clone(),
                 alias: 't',
+                is_flag: false,
                 is_mandatory: true,
                 description: "Test arg desc".to_string(),
                 value: None,
@@ -138,6 +140,7 @@ mod tests {
             let mut arg2 = ArgType {
                 name: arg_name.clone(),
                 alias: 'p',
+                is_flag: false,
                 is_mandatory: true,
                 description: "Test arg desc".to_string(),
                 value: None,
@@ -160,6 +163,7 @@ mod tests {
             let mut arg1 = ArgType {
                 name: "arg1".to_string(),
                 alias: arg_alias,
+                is_flag: false,
                 is_mandatory: true,
                 description: "Test arg desc".to_string(),
                 value: None,
@@ -167,6 +171,7 @@ mod tests {
             let mut arg2 = ArgType {
                 name: "arg2".to_string(),
                 alias: arg_alias,
+                is_flag: false,
                 is_mandatory: true,
                 description: "Test arg desc".to_string(),
                 value: None,
@@ -192,6 +197,7 @@ mod tests {
             let mut mandatory_arg = ArgType {
                 name: arg_name.clone(),
                 alias: 't',
+                is_flag: false,
                 is_mandatory: true,
                 description: "Test arg desc".to_string(),
                 value: None,
@@ -216,6 +222,7 @@ mod tests {
             let mut optional_arg = ArgType {
                 name: "arg".to_string(),
                 alias: 't',
+                is_flag: false,
                 is_mandatory: false,
                 description: "Test arg desc".to_string(),
                 value: None,
@@ -240,12 +247,14 @@ mod tests {
                 name: arg1_name.clone(),
                 alias: 't',
                 is_mandatory: true,
+                is_flag: false,
                 description: "Test arg desc".to_string(),
                 value: None,
             };
             let mut optional_arg = ArgType {
                 name: "arg3".to_string(),
                 alias: 'k',
+                is_flag: false,
                 is_mandatory: false,
                 description: "Test arg desc".to_string(),
                 value: None,
@@ -253,6 +262,7 @@ mod tests {
             let mut mandatory_arg2 = ArgType {
                 name: arg2_name.clone(),
                 alias: 'o',
+                is_flag: false,
                 is_mandatory: true,
                 description: "Test arg desc".to_string(),
                 value: None,
@@ -283,6 +293,7 @@ mod tests {
             let mut optional_arg = ArgType {
                 name: "arg".to_string(),
                 alias: 't',
+                is_flag: false,
                 is_mandatory: true,
                 description: "Test arg desc".to_string(),
                 value: Some("I'm mandatory but with val".to_string()),

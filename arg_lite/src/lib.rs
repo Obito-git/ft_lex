@@ -14,14 +14,21 @@ pub enum ArgLiteErr {
     ExpectedValueButGotNothing(String),
 }
 
-pub struct ArgLite<'a> {
+pub struct ArgLite<'a, I>
+where
+    I: Iterator<Item = String>,
+{
     arg_names: BTreeMap<String, usize>,
     aliases: HashMap<char, usize>,
     args: Vec<DefinedArg<'a>>,
+    source: I,
 }
 
-impl<'a> ArgLite<'a> {
-    fn new(args: Vec<DefinedArg<'a>>) -> Result<Self, ArgLiteErr> {
+impl<'a, I> ArgLite<'a, I>
+where
+    I: Iterator<Item = String>,
+{
+    fn new(args: Vec<DefinedArg<'a>>, source: I) -> Result<Self, ArgLiteErr> {
         let mut arg_names = BTreeMap::new();
         let mut aliases = HashMap::new();
 
@@ -37,6 +44,7 @@ impl<'a> ArgLite<'a> {
             arg_names,
             aliases,
             args,
+            source,
         })
     }
 
@@ -54,30 +62,32 @@ impl<'a> ArgLite<'a> {
         }
     }
 
-    fn parse_internal(
-        defined_args: Vec<DefinedArg>,
-        mut source: impl Iterator<Item = String>,
-    ) -> Result<Vec<String>, ArgLiteErr> {
-        let mut arg_lite = ArgLite::new(defined_args)?;
-        while let Some(cur) = source.next() {
-            if let Some(arg_name) = cur.strip_prefix("--") {
-                if let Some(def_idx) = arg_lite.arg_names.get(arg_name) {
-                    let mut def = &mut arg_lite.args[*def_idx];
-                    if def.is_flag() {
-                        def.set_present(None)?;
-                    } else {
-                        if let Some(value) = source.next() {
-                            def.set_present(Some(value))?;
-                        } else {
-                            Err(ArgLiteErr::ExpectedValueButGotNothing(arg_name.to_string()))?
-                        }
-                    }
+    fn handle_named_arg(&mut self, arg_name: String) -> Result<(), ArgLiteErr> {
+        if let Some(def_idx) = self.arg_names.get(&arg_name) {
+            let mut def = &mut self.args[*def_idx];
+            if def.is_flag() {
+                def.set_present(None)?;
+            } else {
+                if let Some(value) = self.source.next() {
+                    def.set_present(Some(value))?;
                 } else {
-                    Err(ArgLiteErr::UnknownOption(cur))?
+                    Err(ArgLiteErr::ExpectedValueButGotNothing(arg_name.to_string()))?
                 }
+            }
+        } else {
+            Err(ArgLiteErr::UnknownOption(arg_name))?
+        }
+        Ok(())
+    }
+
+    fn parse_internal(defined_args: Vec<DefinedArg>, source: I) -> Result<Vec<String>, ArgLiteErr> {
+        let mut arg_lite = ArgLite::new(defined_args, source)?;
+        while let Some(cur) = arg_lite.source.next() {
+            if let Some(arg_name) = cur.strip_prefix("--") {
+                arg_lite.handle_named_arg(arg_name.to_string())?;
             } else if cur.starts_with("-") {
             } else {
-                return Ok(std::iter::once(cur).chain(source).collect());
+                return Ok(std::iter::once(cur).chain(arg_lite.source).collect());
             }
         }
 
@@ -86,7 +96,6 @@ impl<'a> ArgLite<'a> {
     }
 
     pub fn parse(defined_args: Vec<DefinedArg>) -> Result<Vec<String>, ArgLiteErr> {
-        let a = std::env::args().skip(1).peekable();
         ArgLite::parse_internal(defined_args, std::env::args().skip(1).peekable())
     }
 }

@@ -2,6 +2,10 @@
 
 basic command line argument parser
 
+## TODO
+
+- align naming for args (option, arg, defined arg etc.)
+
 ## Scope
 
 1. Option with a value

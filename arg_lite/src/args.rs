@@ -24,10 +24,10 @@ pub enum DefinedArg<'a> {
 }
 
 impl DefinedArg<'_> {
-    pub(crate) fn name(&self) -> String {
+    pub(crate) fn name(&self) -> &String {
         match self {
-            DefinedArg::Str(arg_type) => arg_type.name.clone(),
-            DefinedArg::Flag(arg_type) => arg_type.name.clone(),
+            DefinedArg::Str(arg_type) => &arg_type.name,
+            DefinedArg::Flag(arg_type) => &arg_type.name,
         }
     }
 
@@ -35,6 +35,13 @@ impl DefinedArg<'_> {
         match self {
             DefinedArg::Str(arg_type) => arg_type.alias,
             DefinedArg::Flag(arg_type) => arg_type.alias,
+        }
+    }
+
+    pub(crate) fn description(&self) -> &String {
+        match self {
+            DefinedArg::Str(arg_type) => &arg_type.description,
+            DefinedArg::Flag(arg_type) => &arg_type.description,
         }
     }
 
@@ -64,8 +71,8 @@ impl DefinedArg<'_> {
 
     pub(crate) fn is_flag(&self) -> bool {
         match self {
-            DefinedArg::Str(str_type) => false,
-            DefinedArg::Flag(flag_type) => true,
+            DefinedArg::Str(_) => false,
+            DefinedArg::Flag(_) => true,
         }
     }
 }

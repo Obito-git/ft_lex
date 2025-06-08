@@ -4,6 +4,14 @@ use args::DefinedArg;
 
 pub mod args;
 
+const OPT_NAME: &str = "name";
+const ALIAS: &str = "alias";
+const DESCRIPTION: &str = "description";
+const REQ: &str = "req";
+const DEFAULT: &str = "default";
+const FLAGS: &str = "Flags (with no value required):";
+const VALUE_OPTION: &str = "Option (expects a value as next argument):";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArgLiteErr {
     AmbigousName(String),
@@ -13,6 +21,7 @@ pub enum ArgLiteErr {
     UnknownAlias(char),
     ExpectedValueButGotNothing(String),
     ValuesAreForbiddenWithMultiAliasSyntax(char),
+    HelpIsReserved,
 }
 
 pub struct ArgLite<'a, I>
@@ -23,19 +32,27 @@ where
     aliases: HashMap<char, usize>,
     args: Vec<DefinedArg<'a>>,
     source: I,
+    usage: Option<String>,
 }
 
 impl<'a, I> ArgLite<'a, I>
 where
     I: Iterator<Item = String>,
 {
-    fn new(args: Vec<DefinedArg<'a>>, source: I) -> Result<Self, ArgLiteErr> {
+    fn new(
+        usage: Option<String>,
+        args: Vec<DefinedArg<'a>>,
+        source: I,
+    ) -> Result<Self, ArgLiteErr> {
         let mut arg_names = BTreeMap::new();
         let mut aliases = HashMap::new();
 
         for (i, a) in args.iter().enumerate() {
-            if arg_names.insert(a.name(), i).is_some() {
-                Err(ArgLiteErr::AmbigousName(a.name()))?;
+            if a.name() == "help" || a.alias() == 'h' {
+                Err(ArgLiteErr::HelpIsReserved)?;
+            }
+            if arg_names.insert(a.name().clone(), i).is_some() {
+                Err(ArgLiteErr::AmbigousName(a.name().to_string()))?;
             }
             if aliases.insert(a.alias(), i).is_some() {
                 Err(ArgLiteErr::AmbigousAlias(a.alias()))?;
@@ -46,6 +63,7 @@ where
             aliases,
             args,
             source,
+            usage,
         })
     }
 
@@ -53,7 +71,7 @@ where
         let mut errors = vec![];
         for arg in &self.args {
             if arg.is_mandatory() && !arg.has_value() {
-                errors.push(arg.name());
+                errors.push(arg.name().clone());
             }
         }
         if !errors.is_empty() {
@@ -63,17 +81,105 @@ where
         }
     }
 
+    fn get_longest_name(it: impl Iterator<Item = &'a DefinedArg<'a>>) -> usize {
+        it.map(|defined_arg| defined_arg.name().len())
+            .chain(std::iter::once(OPT_NAME.len()))
+            .max()
+            .unwrap_or(0)
+    }
+
+    fn map_help_line(
+        name: &str,
+        alias: &str,
+        description: &str,
+        is_mandatory: Option<String>,
+        longest: usize,
+    ) -> String {
+        format!(
+            "{}{}\t{}\t{}{}",
+            name,
+            " ".repeat(longest - name.len()),
+            alias,
+            is_mandatory.map(|v| format!("{v}\t")).unwrap_or_default(),
+            description
+        )
+    }
+
+    fn generate_help(&self) -> Vec<String> {
+        let mut res = Vec::with_capacity(self.args.len());
+
+        if let Some(usage) = &self.usage {
+            res.push(usage.to_string());
+            res.push(String::new());
+        }
+
+        let flags_it = self
+            .arg_names
+            .values()
+            .map(|idx| &self.args[*idx])
+            .filter(|v| v.is_flag());
+        let longest_flag_name = ArgLite::<I>::get_longest_name(flags_it.clone());
+
+        res.push(FLAGS.to_string());
+        res.push(ArgLite::<I>::map_help_line(
+            OPT_NAME,
+            ALIAS,
+            DESCRIPTION,
+            None,
+            longest_flag_name,
+        ));
+
+        for arg in flags_it {
+            res.push(ArgLite::<I>::map_help_line(
+                arg.name(),
+                &arg.alias().to_string(),
+                arg.description(),
+                None,
+                longest_flag_name,
+            ));
+        }
+
+        let opt_it = self
+            .arg_names
+            .values()
+            .map(|idx| &self.args[*idx])
+            .filter(|v| !v.is_flag());
+        let longest_opt_name = ArgLite::<I>::get_longest_name(opt_it.clone());
+
+        res.push(String::new());
+        res.push(VALUE_OPTION.to_string());
+        res.push(ArgLite::<I>::map_help_line(
+            OPT_NAME,
+            ALIAS,
+            DESCRIPTION,
+            Some(REQ.to_string()),
+            longest_opt_name,
+        ));
+
+        for arg in opt_it {
+            res.push(ArgLite::<I>::map_help_line(
+                arg.name(),
+                &arg.alias().to_string(),
+                arg.description(),
+                Some(arg.is_mandatory().to_string()),
+                longest_opt_name,
+            ));
+        }
+
+        res
+    }
+
     //TODO: improve nested if
     fn handle_named_arg(&mut self, def_idx: usize) -> Result<(), ArgLiteErr> {
         let def = &mut self.args[def_idx];
         if def.is_flag() {
             def.set_present(None)?;
+        } else if let Some(value) = self.source.next() {
+            def.set_present(Some(value))?;
         } else {
-            if let Some(value) = self.source.next() {
-                def.set_present(Some(value))?;
-            } else {
-                Err(ArgLiteErr::ExpectedValueButGotNothing(def.name()))?
-            }
+            Err(ArgLiteErr::ExpectedValueButGotNothing(
+                def.name().to_string(),
+            ))?
         }
         Ok(())
     }
@@ -91,29 +197,34 @@ where
             if let Some(value) = self.source.next() {
                 def.set_present(Some(value))?;
             } else {
-                Err(ArgLiteErr::ExpectedValueButGotNothing(def.name()))?
+                Err(ArgLiteErr::ExpectedValueButGotNothing(
+                    def.name().to_string(),
+                ))?
             }
         }
         Ok(())
     }
 
-    fn parse_internal(defined_args: Vec<DefinedArg>, source: I) -> Result<Vec<String>, ArgLiteErr> {
-        let mut arg_lite = ArgLite::new(defined_args, source)?;
+    fn parse_internal(
+        usage: Option<String>,
+        defined_args: Vec<DefinedArg>,
+        source: I,
+    ) -> Result<Vec<String>, ArgLiteErr> {
+        let mut arg_lite = ArgLite::new(usage, defined_args, source)?;
         while let Some(cur) = arg_lite.source.next() {
             if let Some(arg_name) = cur.strip_prefix("--") {
                 let arg_name = arg_name.to_string();
                 let def_idx = arg_lite.arg_names.get(&arg_name).copied();
                 def_idx
                     .map(|def_idx| arg_lite.handle_named_arg(def_idx))
-                    .unwrap_or(Err(ArgLiteErr::UnknownOption(arg_name.to_string())))?;
+                    .unwrap_or(Err(ArgLiteErr::UnknownOption(arg_name)))?;
             } else if let Some(arg_alias) = cur.strip_prefix("-") {
-                let aliases_arg = arg_alias.to_string();
-                let has_one_alias = aliases_arg.len() == 1;
-                for alias in aliases_arg.chars() {
+                let has_one_alias = arg_alias.len() == 1;
+                for alias in arg_alias.chars() {
                     let def_idx = arg_lite.aliases.get(&alias).copied();
                     def_idx
                         .map(|def_idx| arg_lite.handle_alias_arg(def_idx, has_one_alias))
-                        .unwrap_or(Err(ArgLiteErr::UnknownOption(aliases_arg.to_string())))?;
+                        .unwrap_or(Err(ArgLiteErr::UnknownOption(arg_alias.to_string())))?;
                 }
             } else {
                 return Ok(std::iter::once(cur).chain(arg_lite.source).collect());
@@ -124,8 +235,11 @@ where
         Ok(vec![])
     }
 
-    pub fn parse(defined_args: Vec<DefinedArg>) -> Result<Vec<String>, ArgLiteErr> {
-        ArgLite::parse_internal(defined_args, std::env::args().skip(1).peekable())
+    pub fn parse(
+        defined_args: Vec<DefinedArg>,
+        usage: Option<String>,
+    ) -> Result<Vec<String>, ArgLiteErr> {
+        ArgLite::parse_internal(usage, defined_args, std::env::args().skip(1).peekable())
     }
 }
 
@@ -139,6 +253,31 @@ mod tests {
         use super::*;
 
         #[rstest]
+        #[case("help", 'k')]
+        #[case("arg", 'h')]
+        #[case("help", 'h')]
+        fn usage_of_reserved_name_and_aliases_for_help(#[case] name: String, #[case] alias: char) {
+            // given
+            let mut defined_arg = StrType {
+                name,
+                alias,
+                is_mandatory: false,
+                description: "not valid".to_string(),
+                value: None,
+            };
+
+            //when
+            let res = ArgLite::parse_internal(
+                None,
+                vec![DefinedArg::Str(&mut defined_arg)],
+                std::iter::empty(),
+            );
+
+            //then
+            assert_eq!(res, Err(ArgLiteErr::HelpIsReserved))
+        }
+
+        #[rstest]
         #[case(vec!["--doesnt-exist"], "doesnt-exist")]
         #[case(vec!["--doesnt-exist", "--should-not-appear"], "doesnt-exist")]
         #[case(vec!["--doesnt-exist", "-k", "--should-not-appear"], "doesnt-exist")]
@@ -147,7 +286,7 @@ mod tests {
             let input = input.into_iter().map(|v| v.to_string()).collect::<Vec<_>>();
 
             //when
-            let res = ArgLite::parse_internal(vec![], input.into_iter());
+            let res = ArgLite::parse_internal(None, vec![], input.into_iter());
 
             //then
             assert_eq!(res, Err(ArgLiteErr::UnknownOption(expected_err)))
@@ -162,7 +301,7 @@ mod tests {
             let input = input.into_iter().map(|v| v.to_string()).collect::<Vec<_>>();
 
             //when
-            let res = ArgLite::parse_internal(vec![], input.into_iter());
+            let res = ArgLite::parse_internal(None, vec![], input.into_iter());
 
             //then
             assert_eq!(res, Err(ArgLiteErr::UnknownOption(expected_err)))
@@ -194,6 +333,7 @@ mod tests {
 
             // when
             let res = ArgLite::parse_internal(
+                None,
                 vec![DefinedArg::Str(&mut arg1), DefinedArg::Str(&mut arg2)],
                 std::iter::empty(),
             );
@@ -223,6 +363,7 @@ mod tests {
 
             // when
             let res = ArgLite::parse_internal(
+                None,
                 vec![DefinedArg::Str(&mut arg1), DefinedArg::Str(&mut arg2)],
                 std::iter::empty(),
             );
@@ -248,6 +389,7 @@ mod tests {
 
             // when
             let res = ArgLite::parse_internal(
+                None,
                 vec![DefinedArg::Str(&mut mandatory_arg)],
                 std::iter::empty(),
             );
@@ -272,6 +414,7 @@ mod tests {
 
             // when
             let res = ArgLite::parse_internal(
+                None,
                 vec![DefinedArg::Str(&mut optional_arg)],
                 std::iter::empty(),
             );
@@ -308,6 +451,7 @@ mod tests {
 
             // when
             let res = ArgLite::parse_internal(
+                None,
                 vec![
                     DefinedArg::Str(&mut mandatory_arg1),
                     DefinedArg::Flag(&mut optional_flag),
@@ -338,6 +482,7 @@ mod tests {
 
             // when
             let res = ArgLite::parse_internal(
+                None,
                 vec![DefinedArg::Str(&mut optional_arg)],
                 std::iter::empty(),
             );
@@ -361,7 +506,7 @@ mod tests {
             let expected = Ok(input.clone());
 
             //when
-            let res = ArgLite::parse_internal(vec![], input.into_iter());
+            let res = ArgLite::parse_internal(None, vec![], input.into_iter());
 
             //then
             assert_eq!(res, expected);
@@ -378,7 +523,7 @@ mod tests {
             let expected = Ok(input.clone());
 
             //when
-            let res = ArgLite::parse_internal(vec![], input.into_iter());
+            let res = ArgLite::parse_internal(None, vec![], input.into_iter());
 
             //then
             assert_eq!(res, expected);
@@ -395,7 +540,7 @@ mod tests {
             let expected = Ok(input.clone());
 
             //when
-            let res = ArgLite::parse_internal(vec![], input.into_iter());
+            let res = ArgLite::parse_internal(None, vec![], input.into_iter());
 
             //then
             assert_eq!(res, expected);
@@ -420,6 +565,7 @@ mod tests {
 
             // when
             let res = ArgLite::parse_internal(
+                None,
                 vec![DefinedArg::Flag(&mut arg1), DefinedArg::Flag(&mut arg2)],
                 input.into_iter(),
             );
@@ -451,6 +597,7 @@ mod tests {
 
             // when
             let res = ArgLite::parse_internal(
+                None,
                 vec![DefinedArg::Flag(&mut arg1), DefinedArg::Flag(&mut arg2)],
                 input.into_iter(),
             );
@@ -478,8 +625,11 @@ mod tests {
             };
 
             // when
-            let res =
-                ArgLite::parse_internal(vec![DefinedArg::Str(&mut arg_type)], input.into_iter());
+            let res = ArgLite::parse_internal(
+                None,
+                vec![DefinedArg::Str(&mut arg_type)],
+                input.into_iter(),
+            );
 
             // then
             assert_eq!(res, Err(ArgLiteErr::ExpectedValueButGotNothing(name)));
@@ -501,8 +651,11 @@ mod tests {
             };
 
             // when
-            let res =
-                ArgLite::parse_internal(vec![DefinedArg::Str(&mut arg_type)], input.into_iter());
+            let res = ArgLite::parse_internal(
+                None,
+                vec![DefinedArg::Str(&mut arg_type)],
+                input.into_iter(),
+            );
 
             // then
             assert!(res.unwrap().is_empty());
@@ -525,8 +678,11 @@ mod tests {
             };
 
             // when
-            let res =
-                ArgLite::parse_internal(vec![DefinedArg::Str(&mut arg_type)], input.into_iter());
+            let res = ArgLite::parse_internal(
+                None,
+                vec![DefinedArg::Str(&mut arg_type)],
+                input.into_iter(),
+            );
 
             // then
             assert!(res.unwrap().is_empty());
@@ -560,6 +716,7 @@ mod tests {
 
             // when
             let res = ArgLite::parse_internal(
+                None,
                 vec![
                     DefinedArg::Str(&mut arg_type2),
                     DefinedArg::Str(&mut arg_type1),
@@ -573,17 +730,117 @@ mod tests {
             assert_eq!(arg_type2.value, Some(expected_second))
         }
 
-        /*
-        * multiple aliases
-                #[rstest]
-                #[case(vec!["--arg", "value", "-f", "test.txt"], "value", "test.txt")]
-                #[case(vec!["-t", "value", "--file-name", "test.txt"], "value", "test.txt")]
-                fn should_work_with_multiple_different_named_args(
-                    #[case] input: Vec<&str>,
-                    #[case] expected_first: String,
-                    #[case] expected_second: String,
-                ) {
-                }
-        */
+        #[test]
+        fn should_work_with_glewed_flags() {
+            // given
+            let mut flag_f = FlagType {
+                name: "f".to_string(),
+                alias: 'f',
+                description: "f arg".to_string(),
+                is_present: false,
+            };
+            let mut flag_t = FlagType {
+                name: "t".to_string(),
+                alias: 't',
+                description: "t arg".to_string(),
+                is_present: false,
+            };
+            let mut flag_p = FlagType {
+                name: "p".to_string(),
+                alias: 'p',
+                description: "p arg".to_string(),
+                is_present: false,
+            };
+            let input = vec!["-tp".to_string()];
+
+            // when
+            let res = ArgLite::parse_internal(
+                None,
+                vec![
+                    DefinedArg::Flag(&mut flag_f),
+                    DefinedArg::Flag(&mut flag_t),
+                    DefinedArg::Flag(&mut flag_p),
+                ],
+                input.into_iter(),
+            );
+
+            // then
+            assert!(res.unwrap().is_empty());
+            assert!(!flag_f.is_present);
+            assert!(flag_t.is_present);
+            assert!(flag_p.is_present);
+        }
+
+        #[test]
+        fn named_arg_with_value_should_fail_when_in_glewed_flags() {
+            // given
+            let mut flag_f = FlagType {
+                name: "f".to_string(),
+                alias: 'f',
+                description: "f arg".to_string(),
+                is_present: false,
+            };
+            let mut expects_value = StrType {
+                name: "p".to_string(),
+                alias: 'p',
+                description: "p arg".to_string(),
+                is_mandatory: false,
+                value: None,
+            };
+            let input = vec!["-fp".to_string()];
+
+            // when
+            let res = ArgLite::parse_internal(
+                None,
+                vec![
+                    DefinedArg::Flag(&mut flag_f),
+                    DefinedArg::Str(&mut expects_value),
+                ],
+                input.into_iter(),
+            );
+
+            // then
+            assert_eq!(
+                res,
+                Err(ArgLiteErr::ValuesAreForbiddenWithMultiAliasSyntax('p'))
+            )
+        }
+    }
+
+    mod generate_help {
+        use super::*;
+
+        #[test]
+        fn generate_help_with_no_usage() {
+            // given
+            let mut flag_f = FlagType {
+                name: "filename".to_string(),
+                alias: 'f',
+                description: "here is the description of the filename flag".to_string(),
+                is_present: false,
+            };
+            let mut expects_value = StrType {
+                name: "path".to_string(),
+                alias: 'p',
+                description: "GGGstrtype arg".to_string(),
+                is_mandatory: false,
+                value: None,
+            };
+            let arg_lite = ArgLite::new(
+                None,
+                vec![
+                    DefinedArg::Flag(&mut flag_f),
+                    DefinedArg::Str(&mut expects_value),
+                ],
+                std::iter::empty(),
+            )
+            .unwrap();
+
+            // when
+            let help_content = arg_lite.generate_help();
+
+            // then
+            help_content.iter().for_each(|line| println!("{}", line));
+        }
     }
 }

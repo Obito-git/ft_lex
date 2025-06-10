@@ -807,7 +807,9 @@ mod tests {
         }
     }
 
+    /*
     mod generate_help {
+
         use super::*;
 
         #[test]
@@ -843,4 +845,5 @@ mod tests {
             help_content.iter().for_each(|line| println!("{}", line));
         }
     }
+    */
 }

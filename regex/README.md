@@ -6,6 +6,7 @@ basic `extended regex` implementation, that exposes some internals that we can r
 AST is built using Recursive Descent Parsing.
 ### Resources:
 
+- https://www.youtube.com/watch?v=0DQyPKD8RVU - Thompson construction explained
 - https://danielbv.github.io/RegexEngine/ - regex visualizer with NFA
 - https://www.abstractsyntaxseed.com/blog/regex-engine/introduction - at first sight good tutorial
 - https://en.wikipedia.org/wiki/Recursive_descent_parser

@@ -100,9 +100,13 @@ The action taken by lex when encountering any input beginning with a <blank> or 
 ## Schema
 
 ### Project
+
+My current vision, but probably somewhere I'm wrong and several parts could be changed
+
+![project schema](docs/ft_lex_schema.png)
 ### Tests
 
-![workflow](docs/test_schema.png)
+![ft_lex tests](docs/test_schema.png)
 
 ## Dev dependencies
 insta:

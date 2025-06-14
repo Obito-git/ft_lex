@@ -6,7 +6,7 @@ struct NfaTransition {
     pub symbol: Option<char>, // None == epsilon, TODO: in future enum?
 }
 
-struct Nfa {
+pub(crate) struct Nfa {
     pub states_count: usize,             // for now only simple counter
     pub transitions: Vec<NfaTransition>, // TODO: not vec, probably map or ?
     pub start_state: usize,
@@ -23,13 +23,23 @@ impl Nfa {
         self.states_count
     }
 
-    pub fn from_char(c: char) -> Self {
-        let mut nfa = Nfa {
+    fn new() -> Self {
+        Nfa {
             transitions: vec![],
             start_state: 0,
             accept_state: 1,
             states_count: 2,
-        };
+        }
+    }
+
+    pub fn from_epsilon() -> Self {
+        let mut nfa = Nfa::new();
+        nfa.add_transition(nfa.start_state, nfa.accept_state, None);
+        nfa
+    }
+
+    pub fn from_char(c: char) -> Self {
+        let mut nfa = Nfa::new();
         nfa.add_transition(0, 1, Some(c));
         nfa
     }
@@ -103,7 +113,7 @@ impl Nfa {
         self.add_transition(old_accept, new_accept, None);
     }
 
-    fn simulate_matched(&self, s: &str) -> bool {
+    pub(crate) fn accepts(&self, s: &str) -> bool {
         let mut cur_states = follow_epsilons(self, self.start_state);
         for c in s.chars() {
             let mut next_states = HashSet::new();
@@ -129,8 +139,12 @@ impl Nfa {
             }
             res
         }
-
         cur_states.contains(&self.accept_state)
+    }
+
+    //TODO: Do I need it in NFA? probably only in DFA
+    pub(crate) fn find(&self, s: &str) -> Option<()> {
+        todo!()
     }
 }
 
@@ -150,13 +164,13 @@ mod tests {
                 let nfa = Nfa::from_char(pattern_char);
 
                 // should match the same char
-                assert!(nfa.simulate_matched(&pattern_char.to_string()));
+                assert!(nfa.accepts(&pattern_char.to_string()));
 
                 // shouldn't match any other one
                 for x in 32..=126 {
                     let not_pattern_char = x as u8 as char;
                     if i != x {
-                        assert!(!nfa.simulate_matched(&not_pattern_char.to_string()));
+                        assert!(!nfa.accepts(&not_pattern_char.to_string()));
                     }
                 }
             }
@@ -179,7 +193,7 @@ mod tests {
             let nfa = Nfa::from_char(nfa_char);
 
             //when
-            let matched = nfa.simulate_matched(s);
+            let matched = nfa.accepts(s);
 
             //then
             assert!(!matched);
@@ -208,7 +222,7 @@ mod tests {
 
             //when
             nfa1.concatenate(&nfa2);
-            let matched = nfa1.simulate_matched(expected_str);
+            let matched = nfa1.accepts(expected_str);
 
             //then
             assert!(matched);
@@ -237,7 +251,7 @@ mod tests {
 
             //when
             nfa1.concatenate(&nfa2);
-            let matched = nfa1.simulate_matched(expected_str);
+            let matched = nfa1.accepts(expected_str);
 
             //then
             assert!(!matched);
@@ -266,7 +280,7 @@ mod tests {
 
             //when
             nfa1.alternate(&nfa2);
-            let matched = nfa1.simulate_matched(input_str);
+            let matched = nfa1.accepts(input_str);
 
             //then
             assert!(matched);
@@ -293,7 +307,7 @@ mod tests {
 
             //when
             nfa1.alternate(&nfa2);
-            let matched = nfa1.simulate_matched(input_str);
+            let matched = nfa1.accepts(input_str);
 
             //then
             assert!(!matched);
@@ -316,7 +330,7 @@ mod tests {
 
             //when
             base_nfa.kleene_star();
-            let matched = base_nfa.simulate_matched(input_str);
+            let matched = base_nfa.accepts(input_str);
 
             //then
             assert!(matched);
@@ -336,7 +350,7 @@ mod tests {
 
             //when
             base_nfa.kleene_star();
-            let matched = base_nfa.simulate_matched(input_str);
+            let matched = base_nfa.accepts(input_str);
 
             //then
             assert!(!matched);

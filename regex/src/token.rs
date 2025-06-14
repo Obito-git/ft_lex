@@ -12,10 +12,10 @@ pub(crate) struct TokenSequence {
 #[cfg_attr(test, derive(Serialize))]
 pub(crate) enum Token {
     Literal(char),
-    Star,
+    KleeneStar,
     Plus,
     QuestionMark,
-    Pipe,
+    Alter,
     LParen,
     RParen,
 }
@@ -23,9 +23,15 @@ pub(crate) enum Token {
 impl Token {
     pub fn is_quantifier(&self) -> bool {
         match self {
-            Token::Star | Token::Plus | Token::QuestionMark => true,
+            Token::KleeneStar | Token::Plus | Token::QuestionMark => true,
             _ => false,
         }
+    }
+}
+
+impl TokenSequence {
+    pub fn tokens(&self) -> &Vec<Token> {
+        &self.tokens
     }
 }
 
@@ -33,10 +39,10 @@ impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Token::Literal(c) => write!(f, "{}", c),
-            Token::Star => write!(f, "*"),
+            Token::KleeneStar => write!(f, "*"),
             Token::Plus => write!(f, "+"),
             Token::QuestionMark => write!(f, "?"),
-            Token::Pipe => write!(f, "|"),
+            Token::Alter => write!(f, "|"),
             Token::LParen => write!(f, "("),
             Token::RParen => write!(f, ")"),
         }
@@ -44,10 +50,10 @@ impl Display for Token {
 }
 
 // TODO: should be either String, either &str
-impl From<String> for TokenSequence {
-    fn from(pattern: String) -> Self {
+impl From<&str> for TokenSequence {
+    fn from(pattern: &str) -> Self {
         if pattern.is_empty() {
-            unimplemented!()
+            todo!()
         }
         Self {
             tokens: pattern.chars().map(Token::from).collect(),
@@ -58,12 +64,12 @@ impl From<String> for TokenSequence {
 impl From<char> for Token {
     fn from(value: char) -> Self {
         match value {
-            '*' => Token::Star,
+            '*' => Token::KleeneStar,
             '+' => Token::Plus,
             '?' => Token::QuestionMark,
             '(' => Token::LParen,
             ')' => Token::RParen,
-            '|' => Token::Pipe,
+            '|' => Token::Alter,
             _ => Token::Literal(value),
         }
     }

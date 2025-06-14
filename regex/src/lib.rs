@@ -1,32 +1,24 @@
-use std::{collections::HashSet, usize};
+use ast::RegexAstNode;
+use nfa::Nfa;
+use token::TokenSequence;
 
 mod ast;
 mod nfa;
 mod token;
 
 pub struct Regex {
-    pub pattern: String,
+    nfa: Nfa,
 }
 
 impl Regex {
-    pub fn new(pattern: String) -> Result<Self, String> {
-        Ok(Self { pattern })
+    // TODO: err string? or?
+    pub fn new(pattern: &str) -> Result<Self, String> {
+        let nfa = RegexAstNode::new(pattern)?.to_nfa();
+
+        Ok(Self { nfa })
     }
 
-    pub fn matches(s: &str) -> bool {
-        todo!()
-    }
-}
-
-enum RegexAst {
-    Literal(char),
-    KleeneStar(Box<RegexAst>),
-    Either(Box<RegexAst>, Box<RegexAst>),
-    Concat(Box<RegexAst>),
-}
-
-impl RegexAst {
-    pub fn new(pattern: String) -> Result<Self, String> {
-        todo!()
+    pub fn matches(&self, s: &str) -> bool {
+        self.nfa.accepts(s)
     }
 }

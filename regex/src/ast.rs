@@ -1,7 +1,9 @@
 #[cfg(test)]
 use serde::Serialize;
 
+use crate::nfa::Nfa;
 use crate::token::Token;
+use crate::TokenSequence;
 use std::iter::{Enumerate, Peekable};
 use std::slice::Iter;
 
@@ -10,11 +12,14 @@ struct AstParser<'a> {
 }
 
 impl<'a> AstParser<'a> {
-    fn parse(tokens: &'a [Token]) -> Result<RegexAstNode, SyntaxError> {
+    pub fn parse(tokens: &'a [Token]) -> Result<RegexAstNode, SyntaxError> {
         let mut parser = Self {
             tokens: tokens.iter().enumerate().peekable(),
         };
-        let parsed = parser.parse_expression()?;
+
+        let parsed_ast = parser.parse_alternation()?;
+
+        //TODO: don't remember it, check logic
         if let Some((pos, token_left)) = parser.tokens.peek() {
             let syntax_err = if token_left.is_quantifier() {
                 SyntaxError::PrecedentTokenIsNotQuantifiable
@@ -23,50 +28,60 @@ impl<'a> AstParser<'a> {
             };
             Err(syntax_err)
         } else {
-            Ok(parsed)
+            Ok(parsed_ast)
         }
     }
 
-    fn parse_expression(&mut self) -> Result<RegexAstNode, SyntaxError> {
-        let head_node = self.parse_term()?;
+    fn parse_alternation(&mut self) -> Result<RegexAstNode, SyntaxError> {
+        let mut left_node = self.parse_concatenation()?;
 
-        Ok(head_node)
+        while let Some((_, Token::Alter)) = self.tokens.peek() {
+            self.tokens.next();
+
+            let right_node = self.parse_concatenation()?;
+            left_node = RegexAstNode::Alter(Box::new(left_node), Box::new(right_node));
+        }
+
+        Ok(left_node)
     }
 
-    fn parse_term(&mut self) -> Result<RegexAstNode, SyntaxError> {
-        let mut left_node = self.parse_factor()?;
+    fn parse_concatenation(&mut self) -> Result<RegexAstNode, SyntaxError> {
+        let mut left_node = self.parse_quantifier()?;
 
         while self.tokens.peek().map_or(false, |t| {
             matches!(t, (_, Token::Literal(_)) | (_, Token::LParen))
         }) {
-            let right_ast = self.parse_factor()?; // Parse the subsequent factor
-            left_node = RegexAstNode::Concat(Box::new(left_node), Box::new(right_ast));
+            let right_node = self.parse_quantifier()?;
+            left_node = RegexAstNode::Concat(Box::new(left_node), Box::new(right_node));
         }
+
         Ok(left_node)
     }
 
-    fn parse_factor(&mut self) -> Result<RegexAstNode, SyntaxError> {
-        let atom = self.parse_atom()?;
+    fn parse_quantifier(&mut self) -> Result<RegexAstNode, SyntaxError> {
+        let node_to_quantify = self.parse_literal_or_group()?;
 
         if let Some((_, token)) = self.tokens.peek() {
-            match (atom.is_quantifiable(), token.is_quantifier()) {
-                (true, true) => {
-                    self.tokens.next();
-                    Ok(RegexAstNode::Star(Box::new(atom)))
-                }
-                (false, true) => Err(SyntaxError::PrecedentTokenIsNotQuantifiable),
-                (_, _) => Ok(atom),
+            if !token.is_quantifier() {
+                return Ok(node_to_quantify); // Not a quantifier, return the node as is.
             }
+
+            if !node_to_quantify.is_quantifiable() {
+                return Err(SyntaxError::PrecedentTokenIsNotQuantifiable);
+            }
+
+            self.tokens.next();
+            Ok(RegexAstNode::Star(Box::new(node_to_quantify)))
         } else {
-            Ok(atom)
+            Ok(node_to_quantify)
         }
     }
 
-    fn parse_atom(&mut self) -> Result<RegexAstNode, SyntaxError> {
+    fn parse_literal_or_group(&mut self) -> Result<RegexAstNode, SyntaxError> {
         match self.tokens.next() {
             Some((_, Token::Literal(c))) => Ok(RegexAstNode::Literal(*c)),
             Some((_, Token::LParen)) => {
-                let nested_expr = self.parse_expression()?;
+                let nested_expr = self.parse_alternation()?; // A group can contain any expression
                 match self.tokens.next() {
                     Some((_, Token::RParen)) => Ok(nested_expr),
                     Some((pos, token)) => Err(SyntaxError::UnexpectedToken(format!(
@@ -78,9 +93,10 @@ impl<'a> AstParser<'a> {
                     _ => Err(SyntaxError::ExpectedClosingParenthesis),
                 }
             }
-            Some((_, Token::Star)) | Some((_, Token::Plus)) | Some((_, Token::QuestionMark)) => {
-                Err(SyntaxError::PrecedentTokenIsNotQuantifiable)
-            }
+            Some((_, Token::KleeneStar))
+            | Some((_, Token::Plus))
+            | Some((_, Token::QuestionMark)) => Err(SyntaxError::PrecedentTokenIsNotQuantifiable),
+
             _ => Err(SyntaxError::UnexpectedLiteral),
         }
     }
@@ -88,15 +104,49 @@ impl<'a> AstParser<'a> {
 
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(test, derive(Serialize))]
-enum RegexAstNode {
+pub(crate) enum RegexAstNode {
     Literal(char),
     Star(Box<RegexAstNode>),
     Alter(Box<RegexAstNode>, Box<RegexAstNode>),
     Concat(Box<RegexAstNode>, Box<RegexAstNode>),
-    Empty,
+    Empty, //TODO: need?
 }
 
 impl RegexAstNode {
+    pub(crate) fn to_nfa(&self) -> Nfa {
+        match self {
+            RegexAstNode::Literal(c) => Nfa::from_char(*c),
+            RegexAstNode::Concat(left, right) => {
+                let mut left_nfa = RegexAstNode::to_nfa(left);
+                let right_nfa = RegexAstNode::to_nfa(right);
+
+                left_nfa.concatenate(&right_nfa);
+                left_nfa
+            }
+            RegexAstNode::Alter(left, right) => {
+                let mut left_nfa = RegexAstNode::to_nfa(left);
+                let right_nfa = RegexAstNode::to_nfa(right);
+
+                left_nfa.alternate(&right_nfa);
+                left_nfa
+            }
+            RegexAstNode::Star(regex_ast_node) => {
+                let mut nfa_child = RegexAstNode::to_nfa(regex_ast_node);
+
+                nfa_child.kleene_star();
+                nfa_child
+            }
+            RegexAstNode::Empty => Nfa::from_epsilon(),
+        }
+    }
+
+    // TODO: err == string?
+    pub(crate) fn new(pattern: &str) -> Result<Self, String> {
+        let sequence = TokenSequence::from(pattern);
+        //TODO: display?
+        AstParser::parse(sequence.tokens()).map_err(|e| format!("{e:?}"))
+    }
+
     //TODO: check all quantifiable tokens
     // TODO: all concat are quantifiable?
     pub fn is_quantifiable(&self) -> bool {
@@ -120,7 +170,7 @@ impl TryFrom<Vec<Token>> for RegexAstNode {
 
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(test, derive(Serialize))]
-enum SyntaxError {
+pub(crate) enum SyntaxError {
     UnexpectedToken(String),
     ExpectedClosingParenthesis,
     PrecedentTokenIsNotQuantifiable,

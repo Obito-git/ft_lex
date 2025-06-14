@@ -28,6 +28,7 @@ Terminology:
     - [ ] command line argument parser
     - [ ] regex
         - [ ] write doc and define the scope
+        - [ ] implement is_match and find fn
         - [ ] basic regex first (concatenation, alteration and Kleene star)
         - [ ] pattern is parsed to AST
         - [ ] AST transformed to the NFA
@@ -39,6 +40,7 @@ Terminology:
         - [ ] can transform "super" NFA to the DFA
         - [ ] fully tested
         - [ ] can be "compiled" to a transition table to be used in generated files
+
 - [x] Tokenizer
     - [x] Make up a way to efficiently test different configurations
     - [x] Handles only basic parsing related to tokens, but not validate the logic (sequances, regex validation etc).

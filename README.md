@@ -38,6 +38,7 @@ Terminology:
         - [ ] is able to combine NFA later into "super" NFA
         - [ ] can transform "super" NFA to the DFA
         - [ ] fully tested
+        - [ ] can be "compiled" to a transition table to be used in generated files
 - [x] Tokenizer
     - [x] Make up a way to efficiently test different configurations
     - [x] Handles only basic parsing related to tokens, but not validate the logic (sequances, regex validation etc).

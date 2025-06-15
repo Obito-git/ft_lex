@@ -28,19 +28,6 @@ Terminology:
 - [ ] Implement a set of libraries to be used in the current and next projects (yacc and c compiler)
     - [ ] command line argument parser
     - [ ] regex
-        - [ ] write doc and define the scope
-        - [ ] implement is_match and find fn
-        - [ ] basic regex first (concatenation, alteration and Kleene star)
-        - [ ] pattern is parsed to AST
-        - [ ] AST transformed to the NFA
-        - [ ] NFA transformed to the DTA
-        - [ ] extended regex
-        - [ ] the regex is usable for regular needs
-        - [ ] the regex instance should store NFA
-        - [ ] is able to combine NFA later into "super" NFA
-        - [ ] can transform "super" NFA to the DFA
-        - [ ] fully tested
-        - [ ] can be "compiled" to a transition table to be used in generated files
 
 - [x] Tokenizer
     - [x] Make up a way to efficiently test different configurations

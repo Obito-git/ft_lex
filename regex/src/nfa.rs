@@ -1,10 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TransitionKind {
     Symbol(char),
     Epsilon,
-    Any,
+    Wildcard,
 }
 
 struct NfaTransition {
@@ -14,10 +14,24 @@ struct NfaTransition {
 }
 
 pub(crate) struct Nfa {
-    pub states_count: usize,             // for now only simple counter
-    pub transitions: Vec<NfaTransition>, // TODO: not vec, probably map or ?
-    pub start_state: usize,
-    pub accept_state: usize,
+    states_count: usize,             // for now only simple counter
+    transitions: Vec<NfaTransition>, // TODO: not vec, probably map or ?
+    start_state: usize,
+    accept_state: usize,
+}
+
+impl NfaTransition {
+    fn matches(&self, c: char) -> bool {
+        match self.kind {
+            TransitionKind::Symbol(symbol) => symbol == c,
+            TransitionKind::Epsilon => false,
+            TransitionKind::Wildcard => c != '\n',
+        }
+    }
+
+    fn is_epsilon(&self) -> bool {
+        self.kind == TransitionKind::Epsilon
+    }
 }
 
 impl Nfa {
@@ -42,6 +56,12 @@ impl Nfa {
     pub fn from_epsilon() -> Self {
         let mut nfa = Nfa::new();
         nfa.add_transition(nfa.start_state, nfa.accept_state, TransitionKind::Epsilon);
+        nfa
+    }
+
+    pub fn from_wildcard() -> Self {
+        let mut nfa = Nfa::new();
+        nfa.add_transition(nfa.start_state, nfa.accept_state, TransitionKind::Wildcard);
         nfa
     }
 
@@ -132,33 +152,47 @@ impl Nfa {
         self.add_transition(old_accept, new_accept, TransitionKind::Epsilon);
     }
 
-    pub(crate) fn accepts(&self, s: &str) -> bool {
-        let mut cur_states = follow_epsilons(self, self.start_state);
-        for c in s.chars() {
-            let mut next_states = HashSet::new();
+    fn follow_epsilons(&self, initial_states: &[usize]) -> HashSet<usize> {
+        let mut reachable = HashSet::new();
+        let mut queue: VecDeque<usize> = VecDeque::new();
 
-            for matched_transition in self
-                .transitions
-                .iter()
-                .filter(|t| t.kind == TransitionKind::Symbol(c) && cur_states.contains(&t.start))
-            {
-                next_states.extend(follow_epsilons(self, matched_transition.end));
+        for &state in initial_states {
+            if reachable.insert(state) {
+                queue.push_back(state);
             }
-            cur_states = next_states;
         }
 
-        //TODO: redesign to not allocate hashset with only 1 elem each time
-        fn follow_epsilons(nfa: &Nfa, state: usize) -> HashSet<usize> {
-            let mut res = HashSet::from([state]);
-
-            for t in &nfa.transitions {
-                if t.kind == TransitionKind::Epsilon && t.start == state {
-                    res.extend(follow_epsilons(nfa, t.end));
+        while let Some(cur) = queue.pop_front() {
+            for t in &self.transitions {
+                if t.start == cur && t.is_epsilon() && reachable.insert(t.end) {
+                    queue.push_back(t.end);
                 }
             }
-            res
         }
-        cur_states.contains(&self.accept_state)
+
+        reachable
+    }
+
+    pub(crate) fn accepts(&self, s: &str) -> bool {
+        let mut current_states = Self::follow_epsilons(self, &[self.start_state]);
+        for c in s.chars() {
+            let next_states_after_char: Vec<usize> = current_states
+                .iter()
+                .flat_map(|&state| {
+                    self.transitions
+                        .iter()
+                        .filter(move |t| t.start == state && t.matches(c))
+                        .map(|t| t.end)
+                })
+                .collect();
+
+            current_states = self.follow_epsilons(&next_states_after_char);
+            if current_states.is_empty() {
+                return false;
+            }
+        }
+
+        current_states.contains(&self.accept_state)
     }
 
     //TODO: Do I need it in NFA? probably only in DFA
@@ -372,6 +406,165 @@ mod tests {
             let matched = base_nfa.accepts(input_str);
 
             //then
+            assert!(!matched);
+        }
+    }
+
+    // This module would be inside your main test module, next to the other Kleene star tests.
+    mod kleene_star_with_alternation {
+        use super::*;
+        use rstest::rstest;
+
+        #[rstest]
+        #[case('a', 'b', "")]
+        #[case('a', 'b', "a")]
+        #[case('a', 'b', "b")]
+        #[case('x', 'y', "xx")]
+        #[case('x', 'y', "yyyy")]
+        #[case('a', 'b', "ab")]
+        #[case('a', 'b', "ba")]
+        #[case('0', '1', "010101")]
+        #[case('0', '1', "111000101")]
+        #[case('#', '@', "#@#@##@@")]
+        fn should_match_alternation_with_kleene_star(
+            #[case] c1: char,
+            #[case] c2: char,
+            #[case] input: &str,
+        ) {
+            // given: build (c1|c2)*
+            let mut nfa1 = Nfa::from_char(c1);
+            let nfa2 = Nfa::from_char(c2);
+            nfa1.alternate(&nfa2);
+            nfa1.kleene_star();
+
+            // when
+            let matched = nfa1.accepts(input);
+
+            // then
+            assert!(matched);
+        }
+
+        #[rstest]
+        #[case('a', 'b', "c")]
+        #[case('a', 'b', "ac")]
+        #[case('a', 'b', "abc")]
+        #[case('a', 'b', "ca")]
+        #[case('a', 'b', "bca")]
+        #[case('x', 'y', "xxyzyxx")]
+        #[case('0', '1', "0001112000111")]
+        #[case('a', 'b', "a b a")]
+        fn shouldnt_match_alternation_with_kleene_star(
+            #[case] c1: char,
+            #[case] c2: char,
+            #[case] input: &str,
+        ) {
+            // given: build (c1|c2)*
+            let mut nfa1 = Nfa::from_char(c1);
+            let nfa2 = Nfa::from_char(c2);
+            nfa1.alternate(&nfa2);
+
+            // when
+            nfa1.kleene_star();
+            let matched = nfa1.accepts(input);
+
+            // then
+            assert!(!matched);
+        }
+    }
+
+    mod wildcard {
+        use super::*;
+
+        #[test]
+        fn should_match_every_char_except_newline() {
+            // given
+            let nfa = Nfa::from_wildcard();
+
+            // when && then
+            // should not match the new line
+            assert!(!nfa.accepts("\n"));
+
+            // should match any other single printable ASCII character
+            for code_point in 32..=126 {
+                let c = code_point as u8 as char;
+                if c != '\n' {
+                    assert!(nfa.accepts(&c.to_string()));
+                }
+            }
+        }
+
+        #[rstest]
+        #[case("a.c", "abc")]
+        #[case("a.c", "axc")]
+        #[case("a.c", "a$c")]
+        #[case("..", "ab")]
+        #[case("..", "12")]
+        #[case(".*", "")]
+        #[case(".*", "abc")]
+        #[case(".*", "123!@#$")]
+        fn should_match_wildcard_patterns(#[case] pattern: &str, #[case] input_str: &str) {
+            // given
+            let nfa = match pattern {
+                "a.c" => {
+                    let mut nfa = Nfa::from_char('a');
+                    nfa.concatenate(&Nfa::from_wildcard());
+                    nfa.concatenate(&Nfa::from_char('c'));
+                    nfa
+                }
+                ".." => {
+                    let mut nfa = Nfa::from_wildcard();
+                    nfa.concatenate(&Nfa::from_wildcard());
+                    nfa
+                }
+                ".*" => {
+                    let mut nfa = Nfa::from_wildcard();
+                    nfa.kleene_star();
+                    nfa
+                }
+                _ => unreachable!(),
+            };
+
+            // when
+            let matched = nfa.accepts(input_str);
+
+            // then
+            assert!(matched);
+        }
+
+        #[rstest]
+        #[case("a.c", "a\nc")]
+        #[case(".", "\n")]
+        #[case(".*", "abc\ndef")]
+        #[case("a.c", "ac")]
+        #[case("a.c", "abbc")]
+        #[case("..", "a")]
+        fn shouldnt_match_wildcard_patterns(#[case] pattern: &str, #[case] input_str: &str) {
+            // given
+            let nfa = match pattern {
+                "a.c" => {
+                    let mut nfa = Nfa::from_char('a');
+                    nfa.concatenate(&Nfa::from_wildcard());
+                    nfa.concatenate(&Nfa::from_char('c'));
+                    nfa
+                }
+                "." => Nfa::from_wildcard(),
+                ".*" => {
+                    let mut nfa = Nfa::from_wildcard();
+                    nfa.kleene_star();
+                    nfa
+                }
+                ".." => {
+                    let mut nfa = Nfa::from_wildcard();
+                    nfa.concatenate(&Nfa::from_wildcard());
+                    nfa
+                }
+                _ => unreachable!(),
+            };
+
+            // when
+            let matched = nfa.accepts(input_str);
+
+            // then
             assert!(!matched);
         }
     }

@@ -152,6 +152,14 @@ impl Nfa {
         self.add_transition(old_accept, new_accept, TransitionKind::Epsilon);
     }
 
+    pub fn one_or_more(&mut self) {
+        todo!()
+    }
+
+    pub fn zero_or_one(&mut self) {
+        todo!()
+    }
+
     fn follow_epsilons(&self, initial_states: &[usize]) -> HashSet<usize> {
         let mut reachable = HashSet::new();
         let mut queue: VecDeque<usize> = VecDeque::new();

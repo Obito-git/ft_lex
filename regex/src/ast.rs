@@ -59,21 +59,21 @@ impl<'a> AstParser<'a> {
     }
 
     fn parse_quantifier(&mut self) -> Result<RegexAstNode, SyntaxError> {
-        let node_to_quantify = self.parse_literal_or_group()?;
+        let node = self.parse_literal_or_group()?;
 
         if let Some((_, token)) = self.tokens.peek() {
-            if !token.is_quantifier() {
-                return Ok(node_to_quantify); // Not a quantifier, return the node as is.
-            }
-
-            if !node_to_quantify.is_quantifiable() {
+            if !node.is_quantifiable() {
                 return Err(SyntaxError::PrecedentTokenIsNotQuantifiable);
             }
 
-            self.tokens.next();
-            Ok(RegexAstNode::Star(Box::new(node_to_quantify)))
+            if let Some(quantifier_node) = RegexAstNode::from_quantifier(token, node.clone()) {
+                self.tokens.next();
+                Ok(quantifier_node)
+            } else {
+                Ok(node)
+            }
         } else {
-            Ok(node_to_quantify)
+            Ok(node)
         }
     }
 
@@ -106,6 +106,8 @@ impl<'a> AstParser<'a> {
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(test, derive(Serialize))]
 pub(crate) enum RegexAstNode {
+    ZeroOrOne(Box<RegexAstNode>),
+    OneOrMore(Box<RegexAstNode>),
     Literal(char),
     Wildcard,
     Star(Box<RegexAstNode>),
@@ -140,6 +142,8 @@ impl RegexAstNode {
                 nfa_child
             }
             RegexAstNode::Empty => Nfa::from_epsilon(),
+            RegexAstNode::ZeroOrOne(_) => todo!(),
+            RegexAstNode::OneOrMore(_) => todo!(),
         }
     }
 
@@ -152,10 +156,19 @@ impl RegexAstNode {
 
     //TODO: check all quantifiable tokens
     // TODO: all concat are quantifiable?
-    pub fn is_quantifiable(&self) -> bool {
+    fn is_quantifiable(&self) -> bool {
         match self {
             RegexAstNode::Literal(_) | RegexAstNode::Concat(_, _) => true,
             _ => false,
+        }
+    }
+
+    fn from_quantifier(token: &Token, node: RegexAstNode) -> Option<Self> {
+        match token {
+            Token::KleeneStar => Some(RegexAstNode::Star(Box::new(node))),
+            Token::Plus => Some(RegexAstNode::OneOrMore(Box::new(node))),
+            Token::QuestionMark => Some(RegexAstNode::ZeroOrOne(Box::new(node))),
+            _ => None,
         }
     }
 }
@@ -177,7 +190,8 @@ pub(crate) enum SyntaxError {
     UnexpectedToken(String),
     ExpectedClosingParenthesis,
     PrecedentTokenIsNotQuantifiable,
-    UnexpectedLiteral, // Improve
+    UnexpectedLiteral,
+    InternalParsingError, // Improve
 }
 
 #[cfg(test)]

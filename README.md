@@ -18,6 +18,7 @@ Terminology:
 - [x] No dependencies or any external libraries (only the dev ones, that are not included in release, for testing purposes)
 - [ ] Write this description with details and steps.
 - [ ] Draw and maintain the project schemas.
+- [ ] Add all basic derives on all pub structs and enums (like debug,clone, eq etc)
 - [ ] Zero unwrap policy
 - [ ] Zero warnings policy
 - [ ] Structs, modules, functions and libs fully respect encapsulation

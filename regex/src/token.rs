@@ -12,6 +12,7 @@ pub(crate) struct TokenSequence {
 #[cfg_attr(test, derive(Serialize))]
 pub(crate) enum Token {
     Literal(char),
+    Dot,
     KleeneStar,
     Plus,
     QuestionMark,
@@ -45,6 +46,7 @@ impl Display for Token {
             Token::Alter => write!(f, "|"),
             Token::LParen => write!(f, "("),
             Token::RParen => write!(f, ")"),
+            Token::Dot => write!(f, "."),
         }
     }
 }
@@ -64,6 +66,7 @@ impl From<&str> for TokenSequence {
 impl From<char> for Token {
     fn from(value: char) -> Self {
         match value {
+            '.' => Token::Dot,
             '*' => Token::KleeneStar,
             '+' => Token::Plus,
             '?' => Token::QuestionMark,

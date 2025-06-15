@@ -80,6 +80,7 @@ impl<'a> AstParser<'a> {
     fn parse_literal_or_group(&mut self) -> Result<RegexAstNode, SyntaxError> {
         match self.tokens.next() {
             Some((_, Token::Literal(c))) => Ok(RegexAstNode::Literal(*c)),
+            Some((_, Token::Dot)) => Ok(RegexAstNode::Dot),
             Some((_, Token::LParen)) => {
                 let nested_expr = self.parse_alternation()?; // A group can contain any expression
                 match self.tokens.next() {
@@ -106,6 +107,7 @@ impl<'a> AstParser<'a> {
 #[cfg_attr(test, derive(Serialize))]
 pub(crate) enum RegexAstNode {
     Literal(char),
+    Dot,
     Star(Box<RegexAstNode>),
     Alter(Box<RegexAstNode>, Box<RegexAstNode>),
     Concat(Box<RegexAstNode>, Box<RegexAstNode>),
@@ -137,6 +139,7 @@ impl RegexAstNode {
                 nfa_child
             }
             RegexAstNode::Empty => Nfa::from_epsilon(),
+            RegexAstNode::Dot => todo!(),
         }
     }
 

@@ -1,9 +1,16 @@
 use std::collections::HashSet;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TransitionKind {
+    Symbol(char),
+    Epsilon,
+    Any,
+}
+
 struct NfaTransition {
     pub start: usize,
     pub end: usize,
-    pub symbol: Option<char>, // None == epsilon, TODO: in future enum?
+    pub kind: TransitionKind,
 }
 
 pub(crate) struct Nfa {
@@ -14,8 +21,8 @@ pub(crate) struct Nfa {
 }
 
 impl Nfa {
-    fn add_transition(&mut self, start: usize, end: usize, symbol: Option<char>) {
-        self.transitions.push(NfaTransition { start, end, symbol });
+    fn add_transition(&mut self, start: usize, end: usize, kind: TransitionKind) {
+        self.transitions.push(NfaTransition { start, end, kind });
     }
 
     fn add_state(&mut self) -> usize {
@@ -34,13 +41,13 @@ impl Nfa {
 
     pub fn from_epsilon() -> Self {
         let mut nfa = Nfa::new();
-        nfa.add_transition(nfa.start_state, nfa.accept_state, None);
+        nfa.add_transition(nfa.start_state, nfa.accept_state, TransitionKind::Epsilon);
         nfa
     }
 
     pub fn from_char(c: char) -> Self {
         let mut nfa = Nfa::new();
-        nfa.add_transition(0, 1, Some(c));
+        nfa.add_transition(0, 1, TransitionKind::Symbol(c));
         nfa
     }
 
@@ -53,11 +60,15 @@ impl Nfa {
 
         // merge transitions but update including offsets
         for t in &other.transitions {
-            self.add_transition(t.start + offset, t.end + offset, t.symbol);
+            self.add_transition(t.start + offset, t.end + offset, t.kind);
         }
 
         // connect two machines using the epsilon
-        self.add_transition(old_accept, other.start_state + offset, None);
+        self.add_transition(
+            old_accept,
+            other.start_state + offset,
+            TransitionKind::Epsilon,
+        );
 
         // new accept state is the other's accept state but need to respect the offset
         self.accept_state = other.accept_state + offset;
@@ -72,7 +83,7 @@ impl Nfa {
 
         // merge transitions but update including offsets
         for t in &other.transitions {
-            self.add_transition(t.start + offset, t.end + offset, t.symbol);
+            self.add_transition(t.start + offset, t.end + offset, t.kind);
         }
 
         // add new state and make it new start state
@@ -80,16 +91,24 @@ impl Nfa {
         self.start_state = new_start_state;
 
         // add 2 epsilon transitions to the start of both NFAs
-        self.add_transition(new_start_state, old_start, None);
-        self.add_transition(new_start_state, other.start_state + offset, None);
+        self.add_transition(new_start_state, old_start, TransitionKind::Epsilon);
+        self.add_transition(
+            new_start_state,
+            other.start_state + offset,
+            TransitionKind::Epsilon,
+        );
 
         // add new state and make it new accept_state
         let new_accept_state = self.add_state();
         self.accept_state = new_accept_state;
 
         // add 2 epsilon transitions from old accepts to the new one
-        self.add_transition(old_accept, new_accept_state, None);
-        self.add_transition(other.accept_state + offset, new_accept_state, None);
+        self.add_transition(old_accept, new_accept_state, TransitionKind::Epsilon);
+        self.add_transition(
+            other.accept_state + offset,
+            new_accept_state,
+            TransitionKind::Epsilon,
+        );
     }
 
     pub fn kleene_star(&mut self) {
@@ -103,14 +122,14 @@ impl Nfa {
         self.accept_state = new_accept;
 
         // epsilon from old accept to old start
-        self.add_transition(old_accept, old_start, None);
+        self.add_transition(old_accept, old_start, TransitionKind::Epsilon);
 
         // epsilons from new start to old start and new accept
-        self.add_transition(new_start, old_start, None);
-        self.add_transition(new_start, new_accept, None);
+        self.add_transition(new_start, old_start, TransitionKind::Epsilon);
+        self.add_transition(new_start, new_accept, TransitionKind::Epsilon);
 
         // epsilon from old accept to new accept
-        self.add_transition(old_accept, new_accept, None);
+        self.add_transition(old_accept, new_accept, TransitionKind::Epsilon);
     }
 
     pub(crate) fn accepts(&self, s: &str) -> bool {
@@ -121,7 +140,7 @@ impl Nfa {
             for matched_transition in self
                 .transitions
                 .iter()
-                .filter(|t| t.symbol == Some(c) && cur_states.contains(&t.start))
+                .filter(|t| t.kind == TransitionKind::Symbol(c) && cur_states.contains(&t.start))
             {
                 next_states.extend(follow_epsilons(self, matched_transition.end));
             }
@@ -133,7 +152,7 @@ impl Nfa {
             let mut res = HashSet::from([state]);
 
             for t in &nfa.transitions {
-                if t.symbol.is_none() && t.start == state {
+                if t.kind == TransitionKind::Epsilon && t.start == state {
                     res.extend(follow_epsilons(nfa, t.end));
                 }
             }

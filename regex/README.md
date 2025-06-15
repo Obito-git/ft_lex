@@ -48,6 +48,13 @@ AST is built using Recursive Descent Parsing.
 |  x   |                        | `\|`         | **Alternation (OR):** Matches the full expression on either side (ERE-specific).[4, 1, 2]                                                         | `cat|dog` matches "cat" or "dog".               |
 |      | **Backreferences**     | `\n`         | **Backreference:** Matches the same text as most recently matched by the `n`-th capturing group (`n` = 1–9).[2]                                  | `(a)b\1` matches "aba"; `(c.t) and \1` matches "cat and cat". |
 
+## Thomposon construction
+
+
+![regex single letter](docs/regex_single_letter.png)
+![regex concatenate](docs/regex_concatenate.png)
+![regex alteration](docs/regex_alteration.png)
+![regex kleene star](docs/regex_kleene_star.png)
 
 ## Parser is LL(1)
 - L (First L): Input is scanned from Left to right.

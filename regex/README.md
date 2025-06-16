@@ -51,14 +51,34 @@ AST is built using Recursive Descent Parsing.
 ## Thomposon construction
 
 
+### Single letter
+
 ![regex single letter](docs/regex_single_letter.png)
+### Concatenate
+
 ![regex concatenate](docs/regex_concatenate.png)
+### Alteration
+
 ![regex alteration](docs/regex_alteration.png)
+### Kleene star
+
 ![regex kleene star](docs/regex_kleene_star.png)
+
+### Wildcard
+
+![regex wildcard](docs/regex_wildcard.png)
+
+### Zero or one
+
+![regex zero or one](docs/regex_zero_or_one.png)
+
+### One or more
+
+![regex one or more](docs/regex_one_or_more.png)
 
 ## Parser is LL(1)
 - L (First L): Input is scanned from Left to right.
-- L (Second L): The parser produces a Leftmost derivation of the string according to the grammar.
+- L (Second L): The parsr produces a Leftmost derivation of the string according to the grammar.
 
 - (k): The parser uses k tokens of lookahead to make its parsing decisions (i.e., to predict which grammar rule to apply next).
   - Crucially, our parser functions use .peek() to look at the next single token (k=1) to decide what to do:

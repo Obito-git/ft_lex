@@ -19,7 +19,7 @@ pub(crate) struct TokenSequence {
 pub(crate) enum Token {
     Literal(char),
     Dot,
-    KleeneStar,
+    Star,
     Plus,
     QuestionMark,
     Alter,
@@ -30,7 +30,7 @@ pub(crate) enum Token {
 impl Token {
     pub fn is_quantifier(&self) -> bool {
         match self {
-            Token::KleeneStar | Token::Plus | Token::QuestionMark => true,
+            Token::Star | Token::Plus | Token::QuestionMark => true,
             _ => false,
         }
     }
@@ -46,7 +46,7 @@ impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Token::Literal(c) => write!(f, "{}", c),
-            Token::KleeneStar => write!(f, "*"),
+            Token::Star => write!(f, "*"),
             Token::Plus => write!(f, "+"),
             Token::QuestionMark => write!(f, "?"),
             Token::Alter => write!(f, "|"),
@@ -85,7 +85,7 @@ impl From<char> for Token {
     fn from(value: char) -> Self {
         match value {
             '.' => Token::Dot,
-            '*' => Token::KleeneStar,
+            '*' => Token::Star,
             '+' => Token::Plus,
             '?' => Token::QuestionMark,
             '(' => Token::LParen,
@@ -109,7 +109,7 @@ mod tests {
                 Token::Literal('a'),
                 Token::Dot,
                 Token::Literal('b'),
-                Token::KleeneStar,
+                Token::Star,
                 Token::Literal('c'),
                 Token::Plus,
                 Token::Literal('d'),

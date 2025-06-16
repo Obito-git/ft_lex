@@ -245,6 +245,7 @@ name = "regex"
 version = "0.1.0"
 dependencies = [
  "insta",
+ "lazy_static",
  "rstest 0.25.0",
  "serde",
 ]

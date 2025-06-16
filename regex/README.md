@@ -72,6 +72,10 @@ AST is built using Recursive Descent Parsing.
 
 ![regex zero or one](docs/regex_zero_or_one.png)
 
+### One or more
+
+![regex one or more](docs/regex_one_or_more.png)
+
 ## Parser is LL(1)
 - L (First L): Input is scanned from Left to right.
 - L (Second L): The parsr produces a Leftmost derivation of the string according to the grammar.

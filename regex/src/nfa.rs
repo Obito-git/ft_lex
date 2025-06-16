@@ -526,6 +526,17 @@ mod tests {
         #[case(".*", "")]
         #[case(".*", "abc")]
         #[case(".*", "123!@#$")]
+        #[case(".+", "a")]
+        #[case(".+", "abc")]
+        #[case(".+", " a b ")]
+        #[case("a.+c", "ab_c")]
+        #[case("a.+c", "a--c")]
+        #[case(".?", "")]
+        #[case(".?", "a")]
+        #[case(".?", "$")]
+        #[case("a?c", "ac")]
+        #[case("a.?c", "ac")]
+        #[case("a.?c", "abc")]
         fn should_match_wildcard_patterns(#[case] pattern: &str, #[case] input_str: &str) {
             // given
             let nfa = match pattern {
@@ -543,6 +554,38 @@ mod tests {
                 ".*" => {
                     let mut nfa = Nfa::from_wildcard();
                     nfa.kleene_star();
+                    nfa
+                }
+                ".+" => {
+                    let mut nfa = Nfa::from_wildcard();
+                    nfa.one_or_more();
+                    nfa
+                }
+                ".?" => {
+                    let mut nfa = Nfa::from_wildcard();
+                    nfa.zero_or_one();
+                    nfa
+                }
+                "a.+c" => {
+                    let mut nfa = Nfa::from_char('a');
+                    let mut dot_plus_nfa = Nfa::from_wildcard();
+                    dot_plus_nfa.one_or_more();
+                    nfa.concatenate(&dot_plus_nfa);
+                    nfa.concatenate(&Nfa::from_char('c'));
+                    nfa
+                }
+                "a?c" => {
+                    let mut nfa = Nfa::from_char('a');
+                    nfa.zero_or_one();
+                    nfa.concatenate(&Nfa::from_char('c'));
+                    nfa
+                }
+                "a.?c" => {
+                    let mut nfa = Nfa::from_char('a');
+                    let mut dot_q_nfa = Nfa::from_wildcard();
+                    dot_q_nfa.zero_or_one();
+                    nfa.concatenate(&dot_q_nfa);
+                    nfa.concatenate(&Nfa::from_char('c'));
                     nfa
                 }
                 _ => unreachable!(),

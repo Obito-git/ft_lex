@@ -149,8 +149,8 @@ impl RegexAstNode {
 
     // TODO: err == string?
     pub(crate) fn new(pattern: &str) -> Result<Self, String> {
-        let sequence = TokenSequence::from(pattern);
-        //TODO: display?
+        let sequence = TokenSequence::try_from(pattern).unwrap(); //TODO: map err
+                                                                  //TODO: display?
         AstParser::parse(sequence.tokens()).map_err(|e| format!("{e:?}"))
     }
 

@@ -153,11 +153,27 @@ impl Nfa {
     }
 
     pub fn one_or_more(&mut self) {
-        todo!()
+        self.add_transition(self.accept_state, self.start_state, TransitionKind::Epsilon);
     }
 
     pub fn zero_or_one(&mut self) {
-        todo!()
+        let old_start = self.start_state;
+        let old_accept = self.accept_state;
+
+        let new_start = self.add_state();
+        let new_accept = self.add_state();
+
+        self.start_state = new_start;
+        self.accept_state = new_accept;
+
+        // epsilon from new start to old start
+        self.add_transition(new_start, old_start, TransitionKind::Epsilon);
+
+        // epsilon from new start to new accept
+        self.add_transition(new_start, new_accept, TransitionKind::Epsilon);
+
+        // epsilon from old accept to new accept
+        self.add_transition(old_accept, new_accept, TransitionKind::Epsilon);
     }
 
     fn follow_epsilons(&self, initial_states: &[usize]) -> HashSet<usize> {
@@ -571,6 +587,209 @@ mod tests {
 
             // when
             let matched = nfa.accepts(input_str);
+
+            // then
+            assert!(!matched);
+        }
+    }
+
+    mod zero_or_one {
+        use super::*;
+
+        #[rstest]
+        #[case('a', "")]
+        #[case('a', "a")]
+        #[case('b', "b")]
+        #[case('c', "")]
+        #[case('1', "1")]
+        #[case('$', "")]
+        #[case('@', "@")]
+        fn should_match_zero_or_one(#[case] nfa_char: char, #[case] input_str: &str) {
+            // given
+            let mut base_nfa = Nfa::from_char(nfa_char);
+
+            // when
+            base_nfa.zero_or_one();
+            let matched = base_nfa.accepts(input_str);
+
+            // then
+            assert!(matched);
+        }
+
+        #[rstest]
+        #[case('a', "aa")]
+        #[case('b', "bb")]
+        #[case('1', "11")]
+        #[case('a', "b")]
+        #[case('c', "d")]
+        #[case('a', "ab")]
+        #[case('a', "ba")]
+        #[case('a', "bab")]
+        #[case('$', "a$")]
+        fn shouldnt_match_zero_or_one(#[case] nfa_char: char, #[case] input_str: &str) {
+            // given
+            let mut base_nfa = Nfa::from_char(nfa_char);
+
+            // when
+            base_nfa.zero_or_one();
+            let matched = base_nfa.accepts(input_str);
+
+            // then
+            assert!(!matched);
+        }
+    }
+
+    mod zero_or_one_with_alternation {
+        use super::*;
+
+        #[rstest]
+        #[case('a', 'b', "")]
+        #[case('a', 'b', "a")]
+        #[case('a', 'b', "b")]
+        #[case('x', 'y', "y")]
+        #[case('1', '2', "")]
+        #[case('#', '$', "#")]
+        fn should_match_alternation_with_zero_or_one(
+            #[case] char1: char,
+            #[case] char2: char,
+            #[case] input_str: &str,
+        ) {
+            // given: build (char1|char2)
+            let mut nfa1 = Nfa::from_char(char1);
+            let nfa2 = Nfa::from_char(char2);
+            nfa1.alternate(&nfa2);
+
+            // when
+            nfa1.zero_or_one();
+            let matched = nfa1.accepts(input_str);
+
+            // then
+            assert!(matched);
+        }
+
+        #[rstest]
+        #[case('a', 'b', "c")]
+        #[case('a', 'b', "aa")]
+        #[case('a', 'b', "bb")]
+        #[case('a', 'b', "ab")]
+        #[case('a', 'b', "ba")]
+        #[case('x', 'y', "xa")]
+        #[case('1', '2', "1a")]
+        fn shouldnt_match_alternation_with_zero_or_one(
+            #[case] char1: char,
+            #[case] char2: char,
+            #[case] input_str: &str,
+        ) {
+            // given: build (char1|char2)
+            let mut nfa1 = Nfa::from_char(char1);
+            let nfa2 = Nfa::from_char(char2);
+            nfa1.alternate(&nfa2);
+
+            // when
+            nfa1.zero_or_one();
+            let matched = nfa1.accepts(input_str);
+
+            // then
+            assert!(!matched);
+        }
+    }
+
+    mod one_or_more {
+        use super::*;
+
+        #[rstest]
+        #[case('a', "a")]
+        #[case('b', "bb")]
+        #[case('c', "ccccc")]
+        #[case('1', "1111")]
+        #[case('$', "$$")]
+        fn should_match_one_or_more(#[case] nfa_char: char, #[case] input_str: &str) {
+            // given
+            let mut base_nfa = Nfa::from_char(nfa_char);
+
+            // when
+            base_nfa.one_or_more();
+            let matched = base_nfa.accepts(input_str);
+
+            // then
+            assert!(matched);
+        }
+
+        #[rstest]
+        #[case('a', "")]
+        #[case('a', "b")]
+        #[case('c', "d")]
+        #[case('a', "aaab")]
+        #[case('a', "baaa")]
+        #[case('a', "aabaa")]
+        #[case('1', "1121")]
+        #[case('@', "@@.@@")]
+        fn shouldnt_match_one_or_more(#[case] nfa_char: char, #[case] input_str: &str) {
+            // given
+            let mut base_nfa = Nfa::from_char(nfa_char);
+
+            // when
+            base_nfa.one_or_more();
+            let matched = base_nfa.accepts(input_str);
+
+            // then
+            assert!(!matched);
+        }
+    }
+
+    mod one_or_more_with_alternation {
+        use super::*;
+
+        #[rstest]
+        #[case('a', 'b', "a")]
+        #[case('a', 'b', "b")]
+        #[case('x', 'y', "xx")]
+        #[case('x', 'y', "yyyy")]
+        #[case('a', 'b', "ab")]
+        #[case('a', 'b', "ba")]
+        #[case('0', '1', "010101")]
+        #[case('0', '1', "111000101")]
+        #[case('#', '@', "#@#@##@@")]
+        fn should_match_alternation_with_one_or_more(
+            #[case] char1: char,
+            #[case] char2: char,
+            #[case] input_str: &str,
+        ) {
+            // given
+            let mut nfa1 = Nfa::from_char(char1);
+            let nfa2 = Nfa::from_char(char2);
+            nfa1.alternate(&nfa2);
+
+            // when
+            nfa1.one_or_more();
+            let matched = nfa1.accepts(input_str);
+
+            // then
+            assert!(matched);
+        }
+
+        #[rstest]
+        #[case('a', 'b', "")]
+        #[case('a', 'b', "c")]
+        #[case('a', 'b', "ac")]
+        #[case('a', 'b', "abc")]
+        #[case('a', 'b', "ca")]
+        #[case('a', 'b', "bca")]
+        #[case('x', 'y', "xxyzyxx")]
+        #[case('0', '1', "0001112000111")]
+        fn shouldnt_match_alternation_with_one_or_more(
+            #[case] char1: char,
+            #[case] char2: char,
+            #[case] input_str: &str,
+        ) {
+            // given
+            let mut nfa1 = Nfa::from_char(char1);
+            let nfa2 = Nfa::from_char(char2);
+            nfa1.alternate(&nfa2);
+
+            // when
+            nfa1.one_or_more();
+            let matched = nfa1.accepts(input_str);
 
             // then
             assert!(!matched);

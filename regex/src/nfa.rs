@@ -838,4 +838,91 @@ mod tests {
             assert!(!matched);
         }
     }
+
+    mod empty_group {
+        use super::*;
+        use rstest::rstest;
+
+        #[test]
+        fn standalone_empty_group_matches_only_empty_string() {
+            // given: An NFA for an empty group `()`
+            let nfa = Nfa::from_epsilon();
+
+            // then should match empty
+            assert!(nfa.accepts(""));
+
+            // then shouldn't match non empty
+            assert!(!nfa.accepts("a"));
+            assert!(!nfa.accepts(" "));
+        }
+
+        #[test]
+        fn applying_quantifiers_to_empty_group_is_a_no_op() {
+            // given: An NFA for an empty group `()`
+            let mut nfa_star = Nfa::from_epsilon();
+            let mut nfa_plus = Nfa::from_epsilon();
+            let mut nfa_q_mark = Nfa::from_epsilon();
+
+            // when: We apply all three major quantifiers
+            nfa_star.kleene_star(); // ()*
+            nfa_plus.one_or_more(); // ()+
+            nfa_q_mark.zero_or_one(); // ()?
+
+            // then: All of them should still only match the empty string
+            assert!(nfa_star.accepts(""));
+            assert!(!nfa_star.accepts("a"));
+
+            assert!(nfa_plus.accepts(""));
+            assert!(!nfa_plus.accepts("a"));
+
+            assert!(nfa_q_mark.accepts(""));
+            assert!(!nfa_q_mark.accepts("a"));
+        }
+
+        #[rstest]
+        #[case('a', 'b', "ab")] // for a()b
+        #[case('x', 'y', "xy")] // for x()y
+        fn concatenation_with_empty_group_is_a_no_op(
+            #[case] c1: char,
+            #[case] c2: char,
+            #[case] input: &str,
+        ) {
+            // given: Build an NFA for c1()c2
+            let mut nfa = Nfa::from_char(c1);
+            nfa.concatenate(&Nfa::from_epsilon());
+            nfa.concatenate(&Nfa::from_char(c2));
+
+            // then
+            assert!(nfa.accepts(input));
+            assert!(!nfa.accepts(""));
+            assert!(!nfa.accepts(&c1.to_string()));
+            assert!(!nfa.accepts(&c2.to_string()));
+        }
+
+        #[rstest]
+        #[case('a', "a")]
+        #[case('a', "")]
+        #[case('b', "b")]
+        #[case('b', "")]
+        fn alternation_with_empty_group_adds_empty_match(#[case] c: char, #[case] input: &str) {
+            // given: Build an NFA for c|()
+            let mut nfa = Nfa::from_char(c);
+            nfa.alternate(&Nfa::from_epsilon());
+
+            // then
+            assert!(nfa.accepts(input));
+        }
+
+        #[rstest]
+        #[case('a', "b")]
+        #[case('a', "aa")]
+        fn alternation_with_empty_group_doesnt_match_others(#[case] c: char, #[case] input: &str) {
+            // given: Build an NFA for c|()
+            let mut nfa = Nfa::from_char(c);
+            nfa.alternate(&Nfa::from_epsilon());
+
+            // then
+            assert!(!nfa.accepts(input));
+        }
+    }
 }

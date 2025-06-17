@@ -94,6 +94,7 @@ https://craftinginterpreters.com/contents.html
 ## Global TODO:
 
 - [ ] write doc and define the scope
+- [ ] check all errors, and provide correct names and positions
 - [ ] implement is_match and find fn
 - [x] basic regex first (concatenation, alteration and Kleene star)
 - [ ] pattern is parsed to AST

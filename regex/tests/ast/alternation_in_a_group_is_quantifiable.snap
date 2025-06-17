@@ -1,0 +1,10 @@
+---
+source: regex/src/ast.rs
+expression: "(to_pattern_string(&tokens), ast_result)"
+---
+- (a|b)*
+- Ok:
+    Star:
+      Alter:
+        - Literal: a
+        - Literal: b

@@ -1,0 +1,10 @@
+---
+source: regex/src/ast.rs
+expression: "(to_pattern_string(&tokens), ast_result)"
+---
+- (12)*
+- Ok:
+    Star:
+      Concat:
+        - Literal: "1"
+        - Literal: "2"

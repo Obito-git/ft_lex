@@ -1,0 +1,7 @@
+---
+source: regex/src/ast.rs
+expression: "(to_pattern_string(&tokens), ast_result)"
+---
+- a)
+- Err:
+    UnexpectedToken: "Unexpected token ')' at position 1"

@@ -81,7 +81,11 @@ impl<'a> AstParser<'a> {
             Some((_, Token::Literal(c))) => Ok(RegexAstNode::Literal(*c)),
             Some((_, Token::Dot)) => Ok(RegexAstNode::Wildcard),
             Some((_, Token::LParen)) => {
-                let nested_expr = self.parse_alternation()?; // A group can contain any expression
+                if let Some((_, Token::RParen)) = self.tokens.peek() {
+                    self.tokens.next();
+                    return Ok(RegexAstNode::Empty);
+                }
+                let nested_expr = self.parse_alternation()?;
                 match self.tokens.next() {
                     Some((_, Token::RParen)) => Ok(nested_expr),
                     Some((pos, token)) => Err(SyntaxError::UnexpectedToken(format!(
@@ -112,7 +116,7 @@ pub(crate) enum RegexAstNode {
     Star(Box<RegexAstNode>),
     Alter(Box<RegexAstNode>, Box<RegexAstNode>),
     Concat(Box<RegexAstNode>, Box<RegexAstNode>),
-    Empty, //TODO: need?
+    Empty,
 }
 
 impl RegexAstNode {
@@ -194,10 +198,10 @@ pub(crate) enum SyntaxError {
 
 #[cfg(test)]
 mod tests {
-    use lazy_static::lazy_static;
-
     use super::*;
     use crate::token::Token::{Alter, Dot, LParen, Literal, Plus, QuestionMark, RParen, Star};
+    use lazy_static::lazy_static;
+    use rstest::*;
 
     const SNAPSHOT_PATH: &str = "../tests/ast/";
 
@@ -296,19 +300,6 @@ mod tests {
         }
 
         #[test]
-        fn dot_wildcard_with_quantifier() {
-            // given
-            let tokens = vec![Dot, Star];
-
-            // when
-            let ast_result = RegexAstNode::try_from(&tokens);
-
-            // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
-        }
-
-        #[test]
         fn simple_alternation() {
             // given
             let tokens = vec![Literal('a'), Alter, Literal('b')];
@@ -360,46 +351,32 @@ mod tests {
                 .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
         }
 
-        #[test]
-        fn dot_works_with_all_quantifiers() {
-            // given
-            let tokens1 = vec![Dot, Star];
-            let tokens2 = vec![Dot, Plus];
-            let tokens3 = vec![Dot, QuestionMark];
-
+        #[rstest]
+        #[case("dot_works_with_all_quantifiers_case_1", vec![Dot, Star])]
+        #[case("dot_works_with_all_quantifiers_case_2", vec![Dot, Plus])]
+        #[case("dot_works_with_all_quantifiers_case_3", vec![Dot, QuestionMark])]
+        fn dot_works_with_all_quantifiers(#[case] name: &str, #[case] tokens: Vec<Token>) {
             // when
-            let ast_result1 = RegexAstNode::try_from(&tokens1);
-            let ast_result2 = RegexAstNode::try_from(&tokens2);
-            let ast_result3 = RegexAstNode::try_from(&tokens3);
+            let ast_result = RegexAstNode::try_from(&tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens1), ast_result1)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens2), ast_result2)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens3), ast_result3)));
+            INSTA_SETTINGS.bind(|| {
+                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
+            });
         }
 
-        #[test]
-        fn group_works_with_all_quantifiers() {
-            // given
-            let tokens1 = vec![LParen, Literal('a'), RParen, Star];
-            let tokens2 = vec![LParen, Literal('a'), RParen, Plus];
-            let tokens3 = vec![LParen, Literal('a'), RParen, QuestionMark];
-
+        #[rstest]
+        #[case("group_works_with_all_quantifiers_case_1", vec![LParen, Literal('a'), RParen, Star])]
+        #[case("group_works_with_all_quantifiers_case_2", vec![LParen, Literal('a'), RParen, Plus])]
+        #[case("group_works_with_all_quantifiers_case_3", vec![LParen, Literal('a'), RParen, QuestionMark])]
+        fn group_works_with_all_quantifiers(#[case] name: &str, #[case] tokens: Vec<Token>) {
             //when
-            let ast_result1 = RegexAstNode::try_from(&tokens1);
-            let ast_result2 = RegexAstNode::try_from(&tokens2);
-            let ast_result3 = RegexAstNode::try_from(&tokens3);
+            let ast_result = RegexAstNode::try_from(&tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens1), ast_result1)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens2), ast_result2)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens3), ast_result3)));
+            INSTA_SETTINGS.bind(|| {
+                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
+            });
         }
 
         #[test]
@@ -557,25 +534,18 @@ mod tests {
                 .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
         }
 
-        #[test]
-        fn starting_with_a_quantifier_fails() {
-            // given
-            let tokens1 = vec![Star, Literal('a')];
-            let tokens2 = vec![Plus, Literal('a')];
-            let tokens3 = vec![QuestionMark, Literal('a')];
-
+        #[rstest]
+        #[case("starting_with_a_quantifier_fails_case_1", vec![Star, Literal('a')])]
+        #[case("starting_with_a_quantifier_fails_case_2", vec![Plus, Literal('a')])]
+        #[case("starting_with_a_quantifier_fails_case_3", vec![QuestionMark, Literal('a')])]
+        fn starting_with_a_quantifier_fails(#[case] name: &str, #[case] tokens: Vec<Token>) {
             //when
-            let ast_result1 = RegexAstNode::try_from(&tokens1);
-            let ast_result2 = RegexAstNode::try_from(&tokens2);
-            let ast_result3 = RegexAstNode::try_from(&tokens3);
+            let ast_result = RegexAstNode::try_from(&tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens1), ast_result1)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens2), ast_result2)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens3), ast_result3)));
+            INSTA_SETTINGS.bind(|| {
+                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
+            });
         }
 
         #[test]
@@ -617,71 +587,46 @@ mod tests {
                 .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
         }
 
-        #[test]
-        fn quantifier_after_alter_fails() {
-            // given
-            let tokens1 = vec![Literal('a'), Alter, Star];
-            let tokens2 = vec![Literal('a'), Alter, Plus];
-            let tokens3 = vec![Literal('a'), Alter, QuestionMark];
-
+        #[rstest]
+        #[case("quantifier_after_alter_fails_case_1", vec![Literal('a'), Alter, Star])]
+        #[case("quantifier_after_alter_fails_case_2", vec![Literal('a'), Alter, Plus])]
+        #[case("quantifier_after_alter_fails_case_3", vec![Literal('a'), Alter, QuestionMark])]
+        fn quantifier_after_alter_fails(#[case] name: &str, #[case] tokens: Vec<Token>) {
             //when
-            let ast_result1 = RegexAstNode::try_from(&tokens1);
-            let ast_result2 = RegexAstNode::try_from(&tokens2);
-            let ast_result3 = RegexAstNode::try_from(&tokens3);
+            let ast_result = RegexAstNode::try_from(&tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens1), ast_result1)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens2), ast_result2)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens3), ast_result3)));
+            INSTA_SETTINGS.bind(|| {
+                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
+            });
         }
 
-        #[test]
-        fn quantifier_or_alter_after_lparen_fails() {
-            // given
-            let tokens1 = vec![LParen, Star, Literal('a'), RParen];
-            let tokens2 = vec![LParen, Plus, Literal('a'), RParen];
-            let tokens3 = vec![LParen, QuestionMark, Literal('a'), RParen];
-            let tokens4 = vec![LParen, Alter, Literal('a'), RParen];
-
+        #[rstest]
+        #[case("quantifier_or_alter_after_lparen_fails_case_1", vec![LParen, Star, Literal('a'), RParen])]
+        #[case("quantifier_or_alter_after_lparen_fails_case_2", vec![LParen, Plus, Literal('a'), RParen])]
+        #[case("quantifier_or_alter_after_lparen_fails_case_3", vec![LParen, QuestionMark, Literal('a'), RParen])]
+        #[case("quantifier_or_alter_after_lparen_fails_case_4", vec![LParen, Alter, Literal('a'), RParen])]
+        fn quantifier_or_alter_after_lparen_fails(#[case] name: &str, #[case] tokens: Vec<Token>) {
             //when
-            let ast_result1 = RegexAstNode::try_from(&tokens1);
-            let ast_result2 = RegexAstNode::try_from(&tokens2);
-            let ast_result3 = RegexAstNode::try_from(&tokens3);
-            let ast_result4 = RegexAstNode::try_from(&tokens4);
+            let ast_result = RegexAstNode::try_from(&tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens1), ast_result1)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens2), ast_result2)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens3), ast_result3)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens4), ast_result4)));
+            INSTA_SETTINGS.bind(|| {
+                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
+            });
         }
 
-        #[test]
-        fn multiple_quantifiers_in_a_row_fails() {
-            // given
-            let tokens1 = vec![Literal('a'), Star, Plus];
-            let tokens2 = vec![Literal('a'), QuestionMark, Star];
-            let tokens3 = vec![Literal('a'), Plus, QuestionMark];
-
+        #[rstest]
+        #[case("multiple_quantifiers_in_a_row_fails_case_1", vec![Literal('a'), Star, Plus])]
+        #[case("multiple_quantifiers_in_a_row_fails_case_2", vec![Literal('a'), QuestionMark, Star])]
+        #[case("multiple_quantifiers_in_a_row_fails_case_3", vec![Literal('a'), Plus, QuestionMark])]
+        fn multiple_quantifiers_in_a_row_fails(#[case] name: &str, #[case] tokens: Vec<Token>) {
             // when
-            let ast_result1 = RegexAstNode::try_from(&tokens1);
-            let ast_result2 = RegexAstNode::try_from(&tokens2);
-            let ast_result3 = RegexAstNode::try_from(&tokens3);
-
+            let ast_result = RegexAstNode::try_from(&tokens);
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens1), ast_result1)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens2), ast_result2)));
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens3), ast_result3)));
+            INSTA_SETTINGS.bind(|| {
+                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
+            });
         }
 
         #[test]

@@ -1,0 +1,11 @@
+---
+source: regex/src/ast.rs
+expression: "(to_pattern_string(&tokens), ast_result)"
+---
+- ab3
+- Ok:
+    Concat:
+      - Concat:
+          - Literal: a
+          - Literal: b
+      - Literal: "3"

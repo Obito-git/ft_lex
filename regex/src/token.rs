@@ -207,4 +207,50 @@ mod tests {
         // then
         assert_eq!(res, expected);
     }
+
+    #[test]
+    fn test_parsing_of_curly_brackets() {
+        // given
+        let pattern = "a{2,3}|b";
+        let expected = TokenSequence {
+            tokens: vec![
+                Token::Literal('a'),
+                Token::LCurlyBracket,
+                Token::Literal('2'),
+                Token::Literal(','),
+                Token::Literal('3'),
+                Token::RCurlyBracket,
+                Token::Alter,
+                Token::Literal('b'),
+            ],
+        };
+
+        // when
+        let res = TokenSequence::try_from(pattern).unwrap();
+
+        // then
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn test_parsing_with_escaped_curly_brackets() {
+        // given
+        let pattern = r"a\{2,3\}";
+        let expected = TokenSequence {
+            tokens: vec![
+                Token::Literal('a'),
+                Token::Literal('{'),
+                Token::Literal('2'),
+                Token::Literal(','),
+                Token::Literal('3'),
+                Token::Literal('}'),
+            ],
+        };
+
+        // when
+        let res = TokenSequence::try_from(pattern).unwrap();
+
+        // then
+        assert_eq!(res, expected);
+    }
 }

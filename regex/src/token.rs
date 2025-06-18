@@ -11,7 +11,7 @@ pub enum TokenParsingErr {
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(test, derive(Serialize))]
 pub(crate) struct TokenSequence {
-    tokens: Vec<Token>,
+    pub(crate) tokens: Vec<Token>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -25,14 +25,20 @@ pub(crate) enum Token {
     Alter,
     LParen,
     RParen,
+    LCurlyBracket,
+    RCurlyBracket,
 }
 
 impl Token {
     pub fn is_quantifier(&self) -> bool {
         match self {
-            Token::Star | Token::Plus | Token::QuestionMark => true,
+            Token::Star | Token::Plus | Token::QuestionMark | Token::LCurlyBracket => true,
             _ => false,
         }
+    }
+
+    pub fn is_literal(&self) -> bool {
+        matches!(self, Token::Literal(_))
     }
 }
 
@@ -44,15 +50,29 @@ impl TokenSequence {
 
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Token::Literal(c) => write!(f, "{}", c),
-            Token::Star => write!(f, "*"),
-            Token::Plus => write!(f, "+"),
-            Token::QuestionMark => write!(f, "?"),
-            Token::Alter => write!(f, "|"),
-            Token::LParen => write!(f, "("),
-            Token::RParen => write!(f, ")"),
-            Token::Dot => write!(f, "."),
+        write!(f, "{}", char::from(self))
+    }
+}
+
+impl From<Token> for char {
+    fn from(value: Token) -> Self {
+        char::from(&value)
+    }
+}
+
+impl From<&Token> for char {
+    fn from(value: &Token) -> Self {
+        match value {
+            Token::Literal(c) => *c,
+            Token::Star => '*',
+            Token::Plus => '+',
+            Token::QuestionMark => '?',
+            Token::Alter => '|',
+            Token::LParen => '(',
+            Token::RParen => ')',
+            Token::Dot => '.',
+            Token::LCurlyBracket => '{',
+            Token::RCurlyBracket => '}',
         }
     }
 }
@@ -84,6 +104,8 @@ impl TryFrom<&str> for TokenSequence {
 impl From<char> for Token {
     fn from(value: char) -> Self {
         match value {
+            '{' => Token::LCurlyBracket,
+            '}' => Token::RCurlyBracket,
             '.' => Token::Dot,
             '*' => Token::Star,
             '+' => Token::Plus,

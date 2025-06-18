@@ -1,9 +1,9 @@
 #[cfg(test)]
 use serde::Serialize;
 
+use crate::TokenSequence;
 use crate::nfa::Nfa;
 use crate::token::Token;
-use crate::TokenSequence;
 use std::iter::{Enumerate, Peekable};
 use std::vec::IntoIter;
 
@@ -106,9 +106,7 @@ impl AstParser {
                     upper_bound: m,
                 })
             }
-            b => {
-                Err(SyntaxError::UnexpectedLiteral)
-            }, //TODO: fix
+            b => Err(SyntaxError::UnexpectedLiteral), //TODO: fix
         }
     }
 
@@ -248,7 +246,7 @@ impl RegexAstNode {
     // TODO: err == string?
     pub(crate) fn new(pattern: &str) -> Result<Self, String> {
         let sequence = TokenSequence::try_from(pattern).unwrap(); //TODO: map err
-                                                                  //TODO: display?
+        //TODO: display?
         AstParser::parse(sequence.tokens).map_err(|e| format!("{e:?}"))
     }
 
@@ -316,130 +314,130 @@ mod tests {
         fn single_literal() {
             // given
             let tokens = vec![Literal('a')];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn multiple_literals_are_a_concatenation() {
             // given
             let tokens = vec![Literal('a'), Literal('b'), Literal('3')];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn literal_with_star_quantifier() {
             // given
             let tokens = vec![Literal('a'), Star];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn literal_with_plus_quantifier() {
             // given
             let tokens = vec![Literal('b'), Plus];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn literal_with_question_mark_quantifier() {
             // given
             let tokens = vec![Literal('c'), QuestionMark];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn dot_wildcard() {
             // given
             let tokens = vec![Dot];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn simple_alternation() {
             // given
             let tokens = vec![Literal('a'), Alter, Literal('b')];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn alternation_with_concatenation() {
             // given
             let tokens = vec![Literal('a'), Alter, Literal('b'), Literal('c')];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn alternation_with_quantifier() {
             // given
             let tokens = vec![Literal('a'), Alter, Literal('b'), Star];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn grouped_literals_with_quantifier() {
             // given
             let tokens = vec![LParen, Literal('1'), Literal('2'), RParen, Star];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[rstest]
@@ -448,12 +446,12 @@ mod tests {
         #[case("dot_works_with_all_quantifiers_case_3", vec![Dot, QuestionMark])]
         fn dot_works_with_all_quantifiers(#[case] name: &str, #[case] tokens: Vec<Token>) {
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let pattern_string = to_pattern_string(&tokens);
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS.bind(|| {
-                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
-            });
+            INSTA_SETTINGS
+                .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
         }
 
         #[rstest]
@@ -462,51 +460,51 @@ mod tests {
         #[case("group_works_with_all_quantifiers_case_3", vec![LParen, Literal('a'), RParen, QuestionMark])]
         fn group_works_with_all_quantifiers(#[case] name: &str, #[case] tokens: Vec<Token>) {
             //when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let pattern_string = to_pattern_string(&tokens);
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS.bind(|| {
-                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
-            });
+            INSTA_SETTINGS
+                .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
         }
 
         #[test]
         fn alternation_in_a_group_is_quantifiable() {
             // given
             let tokens = vec![LParen, Literal('a'), Alter, Literal('b'), RParen, Star];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn empty_group_is_valid() {
             // given
             let tokens = vec![LParen, RParen];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn empty_group_with_quantifier_is_valid() {
             //given
             let tokens = vec![LParen, RParen, Star];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
@@ -521,13 +519,13 @@ mod tests {
                 Star,
                 RParen,
             ];
+            let pattern_string = to_pattern_string(&tokens);
 
             //when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
     }
 
@@ -538,91 +536,91 @@ mod tests {
         fn only_quantifier_fails() {
             //given
             let tokens = vec![Star];
+            let pattern_string = to_pattern_string(&tokens);
 
             //when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn dangling_plus_quantifier_fails() {
             //given
             let tokens = vec![Plus];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn quantifier_after_alternation_operator_fails() {
             //given
             let tokens = vec![Literal('a'), Alter, Star];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn double_quantifier_fails() {
             //given
             let tokens = vec![Literal('a'), Star, Star];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn unclosed_parenthesis_fails() {
             //given
             let tokens = vec![Literal('a'), LParen, Literal('b')];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn unexpected_closing_parenthesis_fails() {
             //given
             let tokens = vec![Literal('a'), RParen];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn quantifier_after_left_parenthesis_fails() {
             //given
             let tokens = vec![LParen, Star, Literal('1'), RParen];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[rstest]
@@ -631,51 +629,51 @@ mod tests {
         #[case("starting_with_a_quantifier_fails_case_3", vec![QuestionMark, Literal('a')])]
         fn starting_with_a_quantifier_fails(#[case] name: &str, #[case] tokens: Vec<Token>) {
             //when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let pattern_string = to_pattern_string(&tokens);
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS.bind(|| {
-                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
-            });
+            INSTA_SETTINGS
+                .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
         }
 
         #[test]
         fn starting_with_rparen_fails() {
             //given
             let tokens = vec![RParen, Literal('a')];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn starting_with_alter_fails() {
             //given
             let tokens = vec![Alter, Literal('a')];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[test]
         fn ending_with_alter_fails() {
             //given
             let tokens = vec![Literal('a'), Alter];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
 
         #[rstest]
@@ -684,12 +682,12 @@ mod tests {
         #[case("quantifier_after_alter_fails_case_3", vec![Literal('a'), Alter, QuestionMark])]
         fn quantifier_after_alter_fails(#[case] name: &str, #[case] tokens: Vec<Token>) {
             //when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let pattern_string = to_pattern_string(&tokens);
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS.bind(|| {
-                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
-            });
+            INSTA_SETTINGS
+                .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
         }
 
         #[rstest]
@@ -699,12 +697,12 @@ mod tests {
         #[case("quantifier_or_alter_after_lparen_fails_case_4", vec![LParen, Alter, Literal('a'), RParen])]
         fn quantifier_or_alter_after_lparen_fails(#[case] name: &str, #[case] tokens: Vec<Token>) {
             //when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let pattern_string = to_pattern_string(&tokens);
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS.bind(|| {
-                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
-            });
+            INSTA_SETTINGS
+                .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
         }
 
         #[rstest]
@@ -713,24 +711,25 @@ mod tests {
         #[case("multiple_quantifiers_in_a_row_fails_case_3", vec![Literal('a'), Plus, QuestionMark])]
         fn multiple_quantifiers_in_a_row_fails(#[case] name: &str, #[case] tokens: Vec<Token>) {
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let pattern_string = to_pattern_string(&tokens);
+            let ast_result = RegexAstNode::try_from(tokens);
+
             // then
-            INSTA_SETTINGS.bind(|| {
-                insta::assert_yaml_snapshot!(name, (to_pattern_string(&tokens), ast_result))
-            });
+            INSTA_SETTINGS
+                .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
         }
 
         #[test]
         fn double_alter_fails() {
             //given
             let tokens = vec![Literal('a'), Alter, Alter, Literal('b')];
+            let pattern_string = to_pattern_string(&tokens);
 
             // when
-            let ast_result = RegexAstNode::try_from(tokens.clone());
+            let ast_result = RegexAstNode::try_from(tokens);
 
             // then
-            INSTA_SETTINGS
-                .bind(|| insta::assert_yaml_snapshot!((to_pattern_string(&tokens), ast_result)));
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
     }
 }

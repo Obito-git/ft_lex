@@ -1,0 +1,11 @@
+---
+source: regex/src/ast.rs
+expression: "(pattern_string, ast_result)"
+---
+- "a{5,}"
+- Ok:
+    Repeat:
+      node:
+        Literal: a
+      lower_bound: 5
+      upper_bound: ~

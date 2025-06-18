@@ -1,0 +1,6 @@
+---
+source: regex/src/ast.rs
+expression: "(pattern_string, ast_result)"
+---
+- "a{3"
+- Err: UnexpectedEndOfExpression

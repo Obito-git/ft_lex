@@ -1,9 +1,9 @@
 #[cfg(test)]
 use serde::Serialize;
 
-use crate::TokenSequence;
 use crate::nfa::Nfa;
 use crate::token::Token;
+use crate::TokenSequence;
 use std::iter::{Enumerate, Peekable};
 use std::vec::IntoIter;
 
@@ -246,7 +246,7 @@ impl RegexAstNode {
     // TODO: err == string?
     pub(crate) fn new(pattern: &str) -> Result<Self, String> {
         let sequence = TokenSequence::try_from(pattern).unwrap(); //TODO: map err
-        //TODO: display?
+                                                                  //TODO: display?
         AstParser::parse(sequence.tokens).map_err(|e| format!("{e:?}"))
     }
 
@@ -288,7 +288,7 @@ pub(crate) enum SyntaxError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::token::Token::{Alter, Dot, LParen, Literal, Plus, QuestionMark, RParen, Star};
+    use crate::token::Token::*;
     use lazy_static::lazy_static;
     use rstest::*;
 
@@ -527,6 +527,30 @@ mod tests {
             // then
             INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
         }
+
+        #[rstest]
+        #[case("valid_bounded_exact_repetition", vec![Literal('a'), LCurlyBracket, Literal('3'), RCurlyBracket])] // a{3}
+        #[case("valid_bounded_at_least_repetition", vec![Literal('a'), LCurlyBracket, Literal('5'), Literal(','), RCurlyBracket])] // a{5,}
+        #[case("valid_bounded_range_repetition", vec![Literal('a'), LCurlyBracket, Literal('2'), Literal(','), Literal('4'), RCurlyBracket])] // a{2,4}
+        #[case("valid_bounded_zero_repetition", vec![Literal('a'), LCurlyBracket, Literal('0'), RCurlyBracket])] // a{0} - valid edge case
+        #[case("valid_bounded_group_repetition", vec![LParen, Literal('a'), Literal('b'), RParen, LCurlyBracket, Literal('2'), RCurlyBracket])] // (ab){2}
+        #[case("valid_bounded_wildcard_repetition", vec![Dot, LCurlyBracket, Literal('4'), RCurlyBracket])] // .{4}
+        #[case("valid_bounded_space_before_number", vec![Literal('a'), LCurlyBracket, Literal(' '), Literal('3'), RCurlyBracket])] // a{ 3}
+        #[case("valid_bounded_space_after_number", vec![Literal('a'), LCurlyBracket, Literal('3'), Literal(' '), RCurlyBracket])] // a{3 }
+        #[case("valid_bounded_space_around_number", vec![Literal('a'), LCurlyBracket, Literal(' '), Literal('3'), Literal(' '), RCurlyBracket])] // a{ 3 }
+        #[case("valid_bounded_space_in_range", vec![Literal('a'), LCurlyBracket, Literal(' '), Literal('2'), Literal(' '), Literal(','), Literal(' '), Literal('4'), Literal(' '), RCurlyBracket])] // a{ 2 , 4 }
+        #[case("valid_bounded_space_in_at_least", vec![Literal('a'), LCurlyBracket, Literal('5'), Literal(' '), Literal(','), Literal(' '), RCurlyBracket])] // a{5 , }
+        fn test_valid_bounded_quantifiers(#[case] name: &str, #[case] tokens: Vec<Token>) {
+            // given
+            let pattern_string = to_pattern_string(&tokens);
+
+            // when
+            let ast_result = RegexAstNode::try_from(tokens);
+
+            // then
+            INSTA_SETTINGS
+                .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+        }
     }
 
     mod invalid_patterns {
@@ -730,6 +754,29 @@ mod tests {
 
             // then
             INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
+        }
+
+        #[rstest]
+        #[case("invalid_bounded_empty_braces", vec![Literal('a'), LCurlyBracket, RCurlyBracket])] // a{}
+        #[case("invalid_bounded_just_a_comma", vec![Literal('a'), LCurlyBracket, Literal(','), RCurlyBracket])] // a{,}
+        #[case("invalid_bounded_min_greater_than_max", vec![Literal('a'), LCurlyBracket, Literal('5'), Literal(','), Literal('2'), RCurlyBracket])] // a{5,2}
+        #[case("invalid_bounded_non_numeric_content", vec![Literal('a'), LCurlyBracket, Literal('b'), RCurlyBracket])] // a{b}
+        #[case("invalid_bounded_too_many_parts", vec![Literal('a'), LCurlyBracket, Literal('3'), Literal(','), Literal('5'), Literal(','), Literal('6'), RCurlyBracket])] // a{3,5,6}
+        #[case("invalid_bounded_leading_comma", vec![Literal('a'), LCurlyBracket, Literal(','), Literal('3'), RCurlyBracket])] // a{,3}
+        #[case("invalid_bounded_unclosed_simple", vec![Literal('a'), LCurlyBracket, Literal('3')])] // a{3
+        #[case("invalid_bounded_unclosed_with_comma", vec![Literal('a'), LCurlyBracket, Literal('3'), Literal(',')])] // a{3,
+        #[case("invalid_bounded_dangling_quantifier", vec![LCurlyBracket, Literal('3'), RCurlyBracket])] // {3}
+        #[case("invalid_bounded_dangling_after_alter", vec![Literal('a'), Alter, LCurlyBracket, Literal('1'), RCurlyBracket])] // a|{1}
+        fn test_invalid_bounded_quantifiers(#[case] name: &str, #[case] tokens: Vec<Token>) {
+            // given
+            let pattern_string = to_pattern_string(&tokens);
+
+            // when
+            let ast_result = RegexAstNode::try_from(tokens);
+
+            // then
+            INSTA_SETTINGS
+                .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
         }
     }
 }

@@ -1,0 +1,6 @@
+---
+source: regex/src/ast.rs
+expression: "(pattern_string, ast_result)"
+---
+- "a|{1}"
+- Err: UnexpectedLiteral

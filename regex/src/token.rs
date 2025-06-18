@@ -27,6 +27,8 @@ pub(crate) enum Token {
     RParen,
     LCurlyBracket,
     RCurlyBracket,
+    LSquareBracket,
+    RSquareBracket,
 }
 
 impl Token {
@@ -73,6 +75,8 @@ impl From<&Token> for char {
             Token::Dot => '.',
             Token::LCurlyBracket => '{',
             Token::RCurlyBracket => '}',
+            Token::LSquareBracket => '[',
+            Token::RSquareBracket => ']',
         }
     }
 }
@@ -106,6 +110,8 @@ impl From<char> for Token {
         match value {
             '{' => Token::LCurlyBracket,
             '}' => Token::RCurlyBracket,
+            '[' => Token::LSquareBracket,
+            ']' => Token::RSquareBracket,
             '.' => Token::Dot,
             '*' => Token::Star,
             '+' => Token::Plus,
@@ -244,6 +250,52 @@ mod tests {
                 Token::Literal(','),
                 Token::Literal('3'),
                 Token::Literal('}'),
+            ],
+        };
+
+        // when
+        let res = TokenSequence::try_from(pattern).unwrap();
+
+        // then
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn test_parsing_of_square_brackets() {
+        // given
+        let pattern = "a[b-d]|c";
+        let expected = TokenSequence {
+            tokens: vec![
+                Token::Literal('a'),
+                Token::LSquareBracket,
+                Token::Literal('b'),
+                Token::Literal('-'),
+                Token::Literal('d'),
+                Token::RSquareBracket,
+                Token::Alter,
+                Token::Literal('c'),
+            ],
+        };
+
+        // when
+        let res = TokenSequence::try_from(pattern).unwrap();
+
+        // then
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn test_parsing_with_escaped_square_brackets() {
+        // given
+        let pattern = r"a\[b-d\]";
+        let expected = TokenSequence {
+            tokens: vec![
+                Token::Literal('a'),
+                Token::Literal('['),
+                Token::Literal('b'),
+                Token::Literal('-'),
+                Token::Literal('d'),
+                Token::Literal(']'),
             ],
         };
 

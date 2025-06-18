@@ -7,12 +7,14 @@ enum TransitionKind {
     Wildcard,
 }
 
+#[derive(Clone)]
 struct NfaTransition {
     pub start: usize,
     pub end: usize,
     pub kind: TransitionKind,
 }
 
+#[derive(Clone)]
 pub(crate) struct Nfa {
     states_count: usize,             // for now only simple counter
     transitions: Vec<NfaTransition>, // TODO: not vec, probably map or ?
@@ -174,6 +176,33 @@ impl Nfa {
 
         // epsilon from old accept to new accept
         self.add_transition(old_accept, new_accept, TransitionKind::Epsilon);
+    }
+
+    // we assume that lower and upper are validated
+    pub fn from_range(base: &Self, lower: u16, upper: Option<u16>) -> Self {
+        // lower 0 is just an epsilon, and epsilon can be start for other as well
+        let mut res = Self::from_epsilon();
+        // add base "lower" times, a{3.. == aaa
+        for _ in 0..lower {
+            res.concatenate(base);
+        }
+
+        if let Some(upper) = upper {
+            // upper bound same as ?, for example a{2,4} == aaa?a?
+            let mut optional_base = base.clone();
+            optional_base.zero_or_one();
+            for _ in 0..(upper - lower) {
+                res.concatenate(&optional_base);
+            }
+        } else {
+            // {n,} means n times base and base*
+            // a{2,} == aaa*. 2 a are mandatory and a zero or more
+            let mut star_base = base.clone();
+            star_base.kleene_star();
+            res.concatenate(&star_base);
+        }
+
+        res
     }
 
     fn follow_epsilons(&self, initial_states: &[usize]) -> HashSet<usize> {
@@ -923,6 +952,128 @@ mod tests {
 
             // then
             assert!(!nfa.accepts(input));
+        }
+    }
+
+    mod range_quantifier {
+        use super::*;
+
+        fn nfa_from_range(base_char: char, lower: u16, upper: Option<u16>) -> Nfa {
+            let child_nfa = Nfa::from_char(base_char);
+            Nfa::from_range(&child_nfa, lower, upper)
+        }
+
+        // covers {n}
+        mod exact_repetition {
+            use super::*;
+
+            #[rstest]
+            #[case('a', 3, "aaa")]
+            #[case('b', 5, "bbbbb")]
+            #[case('1', 1, "1")]
+            fn should_match_exact_repetitions(
+                #[case] c: char,
+                #[case] n: u16,
+                #[case] input: &str,
+            ) {
+                let nfa = nfa_from_range(c, n, Some(n));
+                assert!(nfa.accepts(input));
+            }
+
+            #[rstest]
+            #[case('a', 3, "aa")] // too few
+            #[case('a', 3, "aaaa")] // too many
+            #[case('b', 1, "")] // empty string
+            #[case('c', 2, "ca")] // wrong character
+            fn should_not_match_incorrect_exact_repetitions(
+                #[case] c: char,
+                #[case] n: u16,
+                #[case] input: &str,
+            ) {
+                let nfa = nfa_from_range(c, n, Some(n));
+                assert!(!nfa.accepts(input));
+            }
+
+            #[test]
+            fn should_match_zero_repetitions_as_empty_string() {
+                // `a{0}` case
+                let nfa = nfa_from_range('a', 0, Some(0));
+                assert!(nfa.accepts(""));
+                assert!(!nfa.accepts("a"));
+            }
+        }
+
+        // covers {n,}
+        mod at_least_repetition {
+            use super::*;
+
+            #[rstest]
+            #[case('a', 2, "aa")] // exactly n
+            #[case('a', 2, "aaa")] // n + 1
+            #[case('a', 2, "aaaaa")] // n + many
+            #[case('b', 1, "b")] // {1,} is same as +
+            #[case('c', 0, "")] // {0,} is same as *
+            #[case('c', 0, "c")]
+            #[case('c', 0, "ccc")]
+            fn should_match_at_least_n_repetitions(
+                #[case] c: char,
+                #[case] n: u16,
+                #[case] input: &str,
+            ) {
+                let nfa = nfa_from_range(c, n, None);
+                assert!(nfa.accepts(input));
+            }
+
+            #[rstest]
+            #[case('a', 2, "a")] // too few
+            #[case('a', 2, "")]
+            #[case('b', 1, "")] // {1,} does not match empty
+            #[case('c', 3, "cdc")]
+            fn should_not_match_fewer_than_n_repetitions(
+                #[case] c: char,
+                #[case] n: u16,
+                #[case] input: &str,
+            ) {
+                let nfa = nfa_from_range(c, n, None);
+                assert!(!nfa.accepts(input));
+            }
+        }
+
+        // covers {n,m}
+        mod range_repetition {
+            use super::*;
+
+            #[rstest]
+            #[case('a', 2, 4, "aa")] // lower bound
+            #[case('a', 2, 4, "aaa")] // in between
+            #[case('a', 2, 4, "aaaa")] // upper bound
+            #[case('b', 0, 2, "")] // zero is allowed
+            #[case('b', 0, 2, "b")]
+            #[case('b', 0, 2, "bb")]
+            fn should_match_repetitions_in_range(
+                #[case] c: char,
+                #[case] n: u16,
+                #[case] m: u16,
+                #[case] input: &str,
+            ) {
+                let nfa = nfa_from_range(c, n, Some(m));
+                assert!(nfa.accepts(input));
+            }
+
+            #[rstest]
+            #[case('a', 2, 4, "a")] // below range
+            #[case('a', 2, 4, "")]
+            #[case('a', 2, 4, "aaaaa")] // above range
+            #[case('b', 0, 2, "bbb")] // above range
+            fn should_not_match_repetitions_outside_range(
+                #[case] c: char,
+                #[case] n: u16,
+                #[case] m: u16,
+                #[case] input: &str,
+            ) {
+                let nfa = nfa_from_range(c, n, Some(m));
+                assert!(!nfa.accepts(input));
+            }
         }
     }
 }

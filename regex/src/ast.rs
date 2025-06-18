@@ -213,21 +213,21 @@ impl RegexAstNode {
             RegexAstNode::Literal(c) => Nfa::from_char(*c),
             RegexAstNode::Wildcard => Nfa::from_wildcard(),
             RegexAstNode::Concat(left, right) => {
-                let mut left_nfa = RegexAstNode::to_nfa(left);
-                let right_nfa = RegexAstNode::to_nfa(right);
+                let mut left_nfa = left.to_nfa();
+                let right_nfa = right.to_nfa();
 
                 left_nfa.concatenate(&right_nfa);
                 left_nfa
             }
             RegexAstNode::Alter(left, right) => {
-                let mut left_nfa = RegexAstNode::to_nfa(left);
-                let right_nfa = RegexAstNode::to_nfa(right);
+                let mut left_nfa = left.to_nfa();
+                let right_nfa = right.to_nfa();
 
                 left_nfa.alternate(&right_nfa);
                 left_nfa
             }
             RegexAstNode::Star(regex_ast_node) => {
-                let mut nfa_child = RegexAstNode::to_nfa(regex_ast_node);
+                let mut nfa_child = regex_ast_node.to_nfa();
 
                 nfa_child.kleene_star();
                 nfa_child
@@ -239,7 +239,7 @@ impl RegexAstNode {
                 node,
                 lower_bound,
                 upper_bound,
-            } => todo!(),
+            } => Nfa::from_range(&node.to_nfa(), *lower_bound, *upper_bound),
         }
     }
 

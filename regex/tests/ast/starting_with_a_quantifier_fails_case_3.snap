@@ -3,4 +3,7 @@ source: regex/src/ast.rs
 expression: "(pattern_string, ast_result)"
 ---
 - "?a"
-- Err: PrecedentTokenIsNotQuantifiable
+- Err:
+    ExpressionCantStartWithQuantifier:
+      - 0
+      - "?"

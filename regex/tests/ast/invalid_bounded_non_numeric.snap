@@ -4,4 +4,4 @@ expression: "(pattern_string, ast_result)"
 ---
 - "a{b}"
 - Err:
-    QuantifierInvalidNumber: b
+    RangeQuantifierInvalidNumber: b

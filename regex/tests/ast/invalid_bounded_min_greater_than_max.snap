@@ -3,4 +3,7 @@ source: regex/src/ast.rs
 expression: "(pattern_string, ast_result)"
 ---
 - "a{5,2}"
-- Err: QuantifierMinGreaterMax
+- Err:
+    RangeQuantifierMinGreaterMax:
+      - 5
+      - 2

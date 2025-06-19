@@ -5,8 +5,6 @@ use crate::nfa::Nfa;
 use crate::token::Token;
 use crate::TokenSequence;
 use std::collections::HashSet;
-use std::iter::{Enumerate, Peekable};
-use std::vec::IntoIter;
 
 struct AstParser {
     seq: TokenSequence,
@@ -23,10 +21,10 @@ impl AstParser {
         let parsed_ast = parser.parse_alternation()?;
 
         if let Some((pos, token_left)) = parser.seq.next_enumerated() {
-            Err(SyntaxError::UnexpectedToken(format!(
-                "Unexpected token '{}' at position {}",
-                token_left, pos
-            )))
+            Err(SyntaxError::UnexpectedTokenInTheEndOfExpr(
+                pos,
+                token_left.into(),
+            ))
         } else {
             Ok(parsed_ast)
         }
@@ -71,13 +69,19 @@ impl AstParser {
                     if !token.is_literal() {
                         break;
                     }
-                    content.push(char::from(self.seq.next().unwrap()));
+                    content.push(self.seq.next().unwrap().into());
                 }
                 if self.seq.peek() != Some(&Token::RCurlyBracket) {
-                    return if let Some((idx, _)) = self.seq.next_enumerated() {
-                        Err(SyntaxError::ExpectedClosingCurlyBracket(idx))
+                    return if let Some((idx, next)) = self.seq.next_enumerated() {
+                        Err(SyntaxError::ExpectedClosingCurlyBracket(
+                            idx,
+                            Some(next.into()),
+                        ))
                     } else {
-                        Err(SyntaxError::UnexpectedEndOfExpression)
+                        Err(SyntaxError::ExpectedClosingCurlyBracket(
+                            self.seq.cur_pos() + 1,
+                            None,
+                        ))
                     };
                 }
                 self.seq.next();
@@ -88,17 +92,20 @@ impl AstParser {
                     upper_bound: m,
                 })
             }
-            _ => Err(SyntaxError::UnexpectedLiteral), //TODO: fix
+            _ => Err(SyntaxError::InternalError), //TODO: fix
         }
     }
 
     fn parse_quantifier(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let mut node = self.parse_literal_or_group()?;
 
-        if let Some(next_token) = self.seq.peek() {
+        if let Some((idx, next_token)) = self.seq.peek_enumerated() {
             if next_token.is_quantifier() {
                 if !node.is_quantifiable() {
-                    return Err(SyntaxError::PrecedentTokenIsNotQuantifiable);
+                    return Err(SyntaxError::PrecedentTokenIsNotQuantifiable(
+                        idx,
+                        next_token.into(),
+                    ));
                 }
                 node = self.map_quantifier(node)?;
             }
@@ -107,33 +114,39 @@ impl AstParser {
     }
 
     fn parse_literal_or_group(&mut self) -> Result<RegexAstNode, SyntaxError> {
-        match self.seq.next() {
-            Some(Token::Literal(c)) => Ok(RegexAstNode::Literal(c)),
-            Some(Token::Dot) => Ok(RegexAstNode::Wildcard),
-            Some(Token::RSquareBracket) => self.parse_square_bracket_expr(),
-            Some(Token::LParen) => {
+        let (idx, token) = self
+            .seq
+            .next_enumerated()
+            .ok_or(SyntaxError::UnexpectedEndOfExpression)?;
+        if token.is_quantifier() {
+            Err(SyntaxError::ExpressionCantStartWithQuantifier(
+                idx,
+                (&token).into(),
+            ))?
+        }
+        match token {
+            Token::Literal(c) => Ok(RegexAstNode::Literal(c)),
+            Token::Dot => Ok(RegexAstNode::Wildcard),
+            Token::RSquareBracket => self.parse_square_bracket_expr(),
+            Token::LParen => {
                 if let Some(Token::RParen) = self.seq.peek() {
                     self.seq.next();
                     return Ok(RegexAstNode::Empty);
                 }
                 let nested_expr = self.parse_alternation()?;
-                let cur_pos = self.seq.cur_pos();
                 match self.seq.next() {
                     Some(Token::RParen) => Ok(nested_expr),
-                    Some(token) => Err(SyntaxError::UnexpectedToken(format!(
-                        "Expected '{}', at position {}, got '{}'",
-                        Token::RParen,
-                        cur_pos,
-                        token
-                    ))),
-                    _ => Err(SyntaxError::ExpectedClosingParenthesis),
+                    Some(token) => Err(SyntaxError::ExpectedClosingParenthesis(
+                        self.seq.cur_pos(),
+                        Some(token.into()),
+                    )),
+                    None => Err(SyntaxError::ExpectedClosingParenthesis(
+                        self.seq.cur_pos() + 1,
+                        None,
+                    )),
                 }
             }
-            Some(Token::Star) | Some(Token::Plus) | Some(Token::QuestionMark) => {
-                Err(SyntaxError::PrecedentTokenIsNotQuantifiable)
-            }
-
-            _ => Err(SyntaxError::UnexpectedLiteral),
+            _ => Err(SyntaxError::UnexpectedToken(idx, token.into())),
         }
     }
 
@@ -166,7 +179,9 @@ impl AstParser {
                         let end_char = char::from(&end_token);
 
                         if start_char > end_char {
-                            return Err(SyntaxError::InvalidRangeInCharacterSet);
+                            return Err(SyntaxError::InvalidRangeInCharacterSet(
+                                start_char, end_char,
+                            ));
                         }
 
                         for c_val in start_char as u32..=end_char as u32 {
@@ -185,7 +200,7 @@ impl AstParser {
 
         let next = self.seq.next();
         if next != Some(Token::RSquareBracket) {
-            Err(SyntaxError::UnexpectedEndOfExpression)?
+            Err(SyntaxError::ExpectedClosingSquareBracket)?
         }
 
         Ok(RegexAstNode::BracketExpression { is_negated, expr })
@@ -193,7 +208,7 @@ impl AstParser {
 
     fn parse_bounded_quantifier(content: Vec<char>) -> Result<(u16, Option<u16>), SyntaxError> {
         if content.is_empty() {
-            return Err(SyntaxError::QuantifierInvalidFormat);
+            return Err(SyntaxError::EmptyRangeQuantifier);
         }
 
         let content = content.into_iter().collect::<String>();
@@ -203,16 +218,16 @@ impl AstParser {
             let n = n_str
                 .trim()
                 .parse::<u16>()
-                .map_err(|_| SyntaxError::QuantifierInvalidNumber(n_str.to_string()))?;
+                .map_err(|_| SyntaxError::RangeQuantifierInvalidNumber(n_str.to_string()))?;
             if m_str.trim().is_empty() {
                 Ok((n, None))
             } else {
                 let m = m_str
                     .trim()
                     .parse::<u16>()
-                    .map_err(|_| SyntaxError::QuantifierInvalidNumber(m_str.to_string()))?;
+                    .map_err(|_| SyntaxError::RangeQuantifierInvalidNumber(m_str.to_string()))?;
                 if n > m {
-                    Err(SyntaxError::QuantifierMinGreaterMax)?
+                    Err(SyntaxError::RangeQuantifierMinGreaterMax(n, m))?
                 }
                 Ok((n, Some(m)))
             }
@@ -220,7 +235,7 @@ impl AstParser {
             let n = content
                 .trim()
                 .parse::<u16>()
-                .map_err(|_| SyntaxError::QuantifierInvalidNumber(content.to_string()))?;
+                .map_err(|_| SyntaxError::RangeQuantifierInvalidNumber(content.to_string()))?;
             Ok((n, Some(n)))
         }
     }
@@ -319,16 +334,19 @@ impl TryFrom<Vec<Token>> for RegexAstNode {
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(test, derive(Serialize))]
 pub(crate) enum SyntaxError {
-    UnexpectedToken(String),
-    ExpectedClosingParenthesis,
-    ExpectedClosingCurlyBracket(usize),
-    PrecedentTokenIsNotQuantifiable,
-    UnexpectedLiteral,
+    UnexpectedToken(usize, char),
+    UnexpectedTokenInTheEndOfExpr(usize, char),
+    ExpectedClosingParenthesis(usize, Option<char>),
+    ExpectedClosingCurlyBracket(usize, Option<char>),
+    PrecedentTokenIsNotQuantifiable(usize, char),
+    ExpressionCantStartWithQuantifier(usize, char),
+    ExpectedClosingSquareBracket,
     UnexpectedEndOfExpression,
-    QuantifierInvalidFormat,
-    QuantifierInvalidNumber(String),
-    QuantifierMinGreaterMax,
-    InvalidRangeInCharacterSet,
+    EmptyRangeQuantifier,
+    RangeQuantifierInvalidNumber(String),
+    RangeQuantifierMinGreaterMax(u16, u16),
+    InvalidRangeInCharacterSet(char, char),
+    InternalError, // TODO: delete, now I put it as stub when not sure
 }
 
 #[cfg(test)]

@@ -3,4 +3,7 @@ source: regex/src/ast.rs
 expression: "(pattern_string, ast_result)"
 ---
 - "{3}"
-- Err: UnexpectedLiteral
+- Err:
+    ExpressionCantStartWithQuantifier:
+      - 0
+      - "{"

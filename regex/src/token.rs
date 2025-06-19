@@ -61,7 +61,20 @@ impl TokenSequence {
         }
     }
 
+    fn skip_escape(&mut self) {
+        while self
+            .tokens
+            .peek()
+            .map(|(_, token)| token == &Token::Escape)
+            .unwrap_or(false)
+        {
+            self.cur_idx += 1;
+            self.tokens.next();
+        }
+    }
+
     pub fn next(&mut self) -> Option<Token> {
+        self.skip_escape();
         if let Some((idx, token)) = self.tokens.next() {
             self.cur_idx = idx;
             Some(token)
@@ -70,6 +83,7 @@ impl TokenSequence {
         }
     }
     pub fn next_enumerated(&mut self) -> Option<(usize, Token)> {
+        self.skip_escape();
         if let Some((idx, token)) = self.tokens.next() {
             self.cur_idx = idx;
             Some((idx, token))
@@ -79,8 +93,18 @@ impl TokenSequence {
     }
 
     pub fn peek(&mut self) -> Option<&Token> {
+        self.skip_escape();
         if let Some((_, token)) = self.tokens.peek() {
             Some(token)
+        } else {
+            None
+        }
+    }
+
+    pub fn peek_enumerated(&mut self) -> Option<(usize, &Token)> {
+        self.skip_escape();
+        if let Some((idx, token)) = self.tokens.peek() {
+            Some((*idx, token))
         } else {
             None
         }
@@ -223,7 +247,6 @@ mod tests {
             Literal('2'),
             RCurlyBracket,
             LSquareBracket,
-            Escape,
             Literal('.'),
             Literal('i'),
             RSquareBracket,
@@ -234,7 +257,6 @@ mod tests {
 
         // then
         assert_eq!(res, expected);
-        assert_eq!(res.len(), expected.len());
     }
 
     #[test]
@@ -243,25 +265,18 @@ mod tests {
         let pattern = r"a\.b\*c\+d\?e\|f\(g\)";
         let expected = vec![
             Literal('a'),
-            Escape,
             Literal('.'),
             Literal('b'),
-            Escape,
             Literal('*'),
             Literal('c'),
-            Escape,
             Literal('+'),
             Literal('d'),
-            Escape,
             Literal('?'),
             Literal('e'),
-            Escape,
             Literal('|'),
             Literal('f'),
-            Escape,
             Literal('('),
             Literal('g'),
-            Escape,
             Literal(')'),
         ];
 
@@ -270,7 +285,6 @@ mod tests {
 
         // then
         assert_eq!(res, expected);
-        assert_eq!(pattern.len(), expected.len());
     }
 
     #[test]
@@ -319,7 +333,6 @@ mod tests {
 
         // then
         assert_eq!(res, expected);
-        assert_eq!(pattern.len(), expected.len());
     }
 
     #[test]
@@ -328,12 +341,10 @@ mod tests {
         let pattern = r"a\{2,3\}";
         let expected = vec![
             Literal('a'),
-            Escape,
             Literal('{'),
             Literal('2'),
             Literal(','),
             Literal('3'),
-            Escape,
             Literal('}'),
         ];
 
@@ -342,7 +353,6 @@ mod tests {
 
         // then
         assert_eq!(res, expected);
-        assert_eq!(pattern.len(), expected.len());
     }
 
     #[test]
@@ -365,7 +375,6 @@ mod tests {
 
         // then
         assert_eq!(res, expected);
-        assert_eq!(pattern.len(), expected.len());
     }
 
     #[test]
@@ -374,12 +383,10 @@ mod tests {
         let pattern = r"a\[b-d\]";
         let expected = vec![
             Literal('a'),
-            Escape,
             Literal('['),
             Literal('b'),
             Literal('-'),
             Literal('d'),
-            Escape,
             Literal(']'),
         ];
 
@@ -388,6 +395,5 @@ mod tests {
 
         // then
         assert_eq!(res, expected);
-        assert_eq!(pattern.len(), expected.len());
     }
 }

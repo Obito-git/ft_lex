@@ -9,41 +9,20 @@ use std::iter::{Enumerate, Peekable};
 use std::vec::IntoIter;
 
 struct AstParser {
-    tokens: Peekable<Enumerate<IntoIter<Token>>>,
-    cur_idx: usize,
+    seq: TokenSequence,
 }
 
 impl AstParser {
-    fn next_token(&mut self) -> Option<Token> {
-        if let Some((idx, token)) = self.tokens.next() {
-            self.cur_idx = idx;
-            Some(token)
-        } else {
-            None
-        }
-    }
-
-    fn peek_token(&mut self) -> Option<&Token> {
-        if let Some((_, token)) = self.tokens.peek() {
-            Some(token)
-        } else {
-            None
-        }
-    }
-
-    pub fn parse(tokens: Vec<Token>) -> Result<RegexAstNode, SyntaxError> {
-        if tokens.is_empty() {
+    pub fn parse(mut seq: TokenSequence) -> Result<RegexAstNode, SyntaxError> {
+        if seq.peek().is_none() {
             return Ok(RegexAstNode::Empty);
         }
 
-        let mut parser = Self {
-            tokens: tokens.into_iter().enumerate().peekable(),
-            cur_idx: 0,
-        };
+        let mut parser = Self { seq };
 
         let parsed_ast = parser.parse_alternation()?;
 
-        if let Some((pos, token_left)) = parser.tokens.peek() {
+        if let Some((pos, token_left)) = parser.seq.next_enumerated() {
             Err(SyntaxError::UnexpectedToken(format!(
                 "Unexpected token '{}' at position {}",
                 token_left, pos
@@ -56,8 +35,8 @@ impl AstParser {
     fn parse_alternation(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let mut left_node = self.parse_concatenation()?;
 
-        while let Some(Token::Alter) = self.peek_token() {
-            self.tokens.next();
+        while let Some(Token::Alter) = self.seq.peek() {
+            self.seq.next();
 
             let right_node = self.parse_concatenation()?;
             left_node = RegexAstNode::Alter(Box::new(left_node), Box::new(right_node));
@@ -69,9 +48,11 @@ impl AstParser {
     fn parse_concatenation(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let mut left_node = self.parse_quantifier()?;
 
-        while self.tokens.peek().map_or(false, |t| {
-            matches!(t, (_, Token::Literal(_)) | (_, Token::LParen))
-        }) {
+        while self
+            .seq
+            .peek()
+            .map_or(false, |t| matches!(t, Token::Literal(_) | Token::LParen))
+        {
             let right_node = self.parse_quantifier()?;
             left_node = RegexAstNode::Concat(Box::new(left_node), Box::new(right_node));
         }
@@ -80,26 +61,26 @@ impl AstParser {
     }
 
     fn map_quantifier(&mut self, node: RegexAstNode) -> Result<RegexAstNode, SyntaxError> {
-        match self.next_token() {
+        match self.seq.next() {
             Some(Token::Star) => Ok(RegexAstNode::Star(Box::new(node))),
             Some(Token::Plus) => Ok(RegexAstNode::OneOrMore(Box::new(node))),
             Some(Token::QuestionMark) => Ok(RegexAstNode::ZeroOrOne(Box::new(node))),
             Some(Token::LCurlyBracket) => {
                 let mut content = Vec::new();
-                while let Some(token) = self.peek_token() {
+                while let Some(token) = self.seq.peek() {
                     if !token.is_literal() {
                         break;
                     }
-                    content.push(char::from(self.next_token().unwrap()));
+                    content.push(char::from(self.seq.next().unwrap()));
                 }
-                if self.peek_token() != Some(&Token::RCurlyBracket) {
-                    return if let Some((idx, _)) = self.tokens.next() {
+                if self.seq.peek() != Some(&Token::RCurlyBracket) {
+                    return if let Some((idx, _)) = self.seq.next_enumerated() {
                         Err(SyntaxError::ExpectedClosingCurlyBracket(idx))
                     } else {
                         Err(SyntaxError::UnexpectedEndOfExpression)
                     };
                 }
-                self.next_token();
+                self.seq.next();
                 let (n, m) = Self::parse_bounded_quantifier(content)?;
                 Ok(RegexAstNode::Repeat {
                     node: Box::new(node),
@@ -114,7 +95,7 @@ impl AstParser {
     fn parse_quantifier(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let mut node = self.parse_literal_or_group()?;
 
-        if let Some(next_token) = self.peek_token() {
+        if let Some(next_token) = self.seq.peek() {
             if next_token.is_quantifier() {
                 if !node.is_quantifiable() {
                     return Err(SyntaxError::PrecedentTokenIsNotQuantifiable);
@@ -126,18 +107,18 @@ impl AstParser {
     }
 
     fn parse_literal_or_group(&mut self) -> Result<RegexAstNode, SyntaxError> {
-        match self.next_token() {
+        match self.seq.next() {
             Some(Token::Literal(c)) => Ok(RegexAstNode::Literal(c)),
             Some(Token::Dot) => Ok(RegexAstNode::Wildcard),
             Some(Token::RSquareBracket) => self.parse_square_bracket_expr(),
             Some(Token::LParen) => {
-                if let Some(Token::RParen) = self.peek_token() {
-                    self.tokens.next();
+                if let Some(Token::RParen) = self.seq.peek() {
+                    self.seq.next();
                     return Ok(RegexAstNode::Empty);
                 }
                 let nested_expr = self.parse_alternation()?;
-                let cur_pos = self.cur_idx;
-                match self.next_token() {
+                let cur_pos = self.seq.cur_pos();
+                match self.seq.next() {
                     Some(Token::RParen) => Ok(nested_expr),
                     Some(token) => Err(SyntaxError::UnexpectedToken(format!(
                         "Expected '{}', at position {}, got '{}'",
@@ -160,26 +141,26 @@ impl AstParser {
         let mut expr = HashSet::new();
         let mut is_negated = false;
 
-        if self.peek_token() == Some(&Token::RSquareBracket) {
+        if self.seq.peek() == Some(&Token::RSquareBracket) {
             // handle POSIX classes
-        } else if self.peek_token() == Some(&Token::Literal('^')) {
+        } else if self.seq.peek() == Some(&Token::Literal('^')) {
             is_negated = true;
-            self.next_token();
+            self.seq.next();
         }
 
-        while let Some(token) = self.peek_token() {
+        while let Some(token) = self.seq.peek() {
             if *token == Token::RSquareBracket {
                 break;
             }
 
-            let start_token = self.next_token().unwrap();
+            let start_token = self.seq.next().unwrap();
 
-            if self.peek_token() == Some(&Token::Literal('-')) {
-                self.next_token();
+            if self.seq.peek() == Some(&Token::Literal('-')) {
+                self.seq.next();
 
-                if let Some(end_token) = self.peek_token().cloned() {
+                if let Some(end_token) = self.seq.peek().cloned() {
                     if end_token != Token::RSquareBracket {
-                        self.next_token();
+                        self.seq.next();
 
                         let start_char = char::from(&start_token);
                         let end_char = char::from(&end_token);
@@ -202,7 +183,7 @@ impl AstParser {
             }
         }
 
-        let next = self.next_token();
+        let next = self.seq.next();
         if next != Some(Token::RSquareBracket) {
             Err(SyntaxError::UnexpectedEndOfExpression)?
         }
@@ -308,7 +289,7 @@ impl RegexAstNode {
     pub(crate) fn new(pattern: &str) -> Result<Self, String> {
         let sequence = TokenSequence::try_from(pattern).unwrap(); //TODO: map err
                                                                   //TODO: display?
-        AstParser::parse(sequence.tokens).map_err(|e| format!("{e:?}"))
+        AstParser::parse(sequence).map_err(|e| format!("{e:?}"))
     }
 
     //TODO: check all quantifiable tokens
@@ -331,7 +312,7 @@ impl TryFrom<Vec<Token>> for RegexAstNode {
         if tokens.is_empty() {
             return Ok(RegexAstNode::Empty);
         }
-        AstParser::parse(tokens)
+        AstParser::parse(TokenSequence::new(tokens))
     }
 }
 

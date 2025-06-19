@@ -33,7 +33,7 @@ impl AstParser {
     fn parse_alternation(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let mut left_node = self.parse_concatenation()?;
 
-        while let Some(Token::Alter) = self.seq.peek() {
+        while let Some(Token::Pipe) = self.seq.peek() {
             self.seq.next();
 
             let right_node = self.parse_concatenation()?;
@@ -432,7 +432,7 @@ mod tests {
         #[test]
         fn simple_alternation() {
             // given
-            let tokens = vec![Literal('a'), Alter, Literal('b')]; // a|b
+            let tokens = vec![Literal('a'), Pipe, Literal('b')]; // a|b
             let pattern_string = to_pattern_string(&tokens);
             // when
             let ast_result = RegexAstNode::try_from(tokens);
@@ -443,7 +443,7 @@ mod tests {
         #[test]
         fn alternation_with_concatenation() {
             // given
-            let tokens = vec![Literal('a'), Alter, Literal('b'), Literal('c')]; // a|bc
+            let tokens = vec![Literal('a'), Pipe, Literal('b'), Literal('c')]; // a|bc
             let pattern_string = to_pattern_string(&tokens);
             // when
             let ast_result = RegexAstNode::try_from(tokens);
@@ -454,7 +454,7 @@ mod tests {
         #[test]
         fn alternation_with_quantifier() {
             // given
-            let tokens = vec![Literal('a'), Alter, Literal('b'), Star]; // a|b*
+            let tokens = vec![Literal('a'), Pipe, Literal('b'), Star]; // a|b*
             let pattern_string = to_pattern_string(&tokens);
             // when
             let ast_result = RegexAstNode::try_from(tokens);
@@ -465,7 +465,7 @@ mod tests {
         #[test]
         fn starting_with_alter_fails() {
             //given
-            let tokens = vec![Alter, Literal('a')]; // |a
+            let tokens = vec![Pipe, Literal('a')]; // |a
             let pattern_string = to_pattern_string(&tokens);
             // when
             let ast_result = RegexAstNode::try_from(tokens);
@@ -476,7 +476,7 @@ mod tests {
         #[test]
         fn ending_with_alter_fails() {
             //given
-            let tokens = vec![Literal('a'), Alter]; // a|
+            let tokens = vec![Literal('a'), Pipe]; // a|
             let pattern_string = to_pattern_string(&tokens);
             // when
             let ast_result = RegexAstNode::try_from(tokens);
@@ -487,7 +487,7 @@ mod tests {
         #[test]
         fn double_alter_fails() {
             //given
-            let tokens = vec![Literal('a'), Alter, Alter, Literal('b')]; // a||b
+            let tokens = vec![Literal('a'), Pipe, Pipe, Literal('b')]; // a||b
             let pattern_string = to_pattern_string(&tokens);
             // when
             let ast_result = RegexAstNode::try_from(tokens);
@@ -526,7 +526,7 @@ mod tests {
         #[test]
         fn alternation_in_a_group_is_quantifiable() {
             // given
-            let tokens = vec![LParen, Literal('a'), Alter, Literal('b'), RParen, Star]; // (a|b)*
+            let tokens = vec![LParen, Literal('a'), Pipe, Literal('b'), RParen, Star]; // (a|b)*
             let pattern_string = to_pattern_string(&tokens);
             // when
             let ast_result = RegexAstNode::try_from(tokens);
@@ -708,7 +708,7 @@ mod tests {
             #[test]
             fn quantifier_after_alternation_operator_fails() {
                 //given
-                let tokens = vec![Literal('a'), Alter, Star]; // a|*
+                let tokens = vec![Literal('a'), Pipe, Star]; // a|*
                 let pattern_string = to_pattern_string(&tokens);
                 // when
                 let ast_result = RegexAstNode::try_from(tokens);

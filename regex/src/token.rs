@@ -15,13 +15,13 @@ pub enum TokenParsingErr {
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(test, derive(Serialize))]
 pub(crate) enum Token {
-    Escape,
+    BackSlash,
     Literal(char),
     Dot,
     Star,
     Plus,
     QuestionMark,
-    Alter,
+    Pipe,
     LParen,
     RParen,
     LCurlyBracket,
@@ -65,7 +65,7 @@ impl TokenSequence {
         while self
             .tokens
             .peek()
-            .map(|(_, token)| token == &Token::Escape)
+            .map(|(_, token)| token == &Token::BackSlash)
             .unwrap_or(false)
         {
             self.cur_idx += 1;
@@ -142,7 +142,7 @@ impl From<&Token> for char {
             Token::Star => '*',
             Token::Plus => '+',
             Token::QuestionMark => '?',
-            Token::Alter => '|',
+            Token::Pipe => '|',
             Token::LParen => '(',
             Token::RParen => ')',
             Token::Dot => '.',
@@ -150,7 +150,7 @@ impl From<&Token> for char {
             Token::RCurlyBracket => '}',
             Token::LSquareBracket => '[',
             Token::RSquareBracket => ']',
-            Token::Escape => '\\',
+            Token::BackSlash => '\\',
         }
     }
 }
@@ -168,7 +168,7 @@ impl TryFrom<&str> for TokenSequence {
                 if let Some(escaped) = pattern_iter.next() {
                     // not used, but helps to keep track of original position
                     // to be able to return right position for the error handling
-                    tokens.push(Token::Escape);
+                    tokens.push(Token::BackSlash);
                     tokens.push(Token::Literal(escaped));
                 } else {
                     return Err(TokenParsingErr::EscapedNothing);
@@ -194,7 +194,7 @@ impl From<char> for Token {
             '?' => Token::QuestionMark,
             '(' => Token::LParen,
             ')' => Token::RParen,
-            '|' => Token::Alter,
+            '|' => Token::Pipe,
             _ => Token::Literal(value),
         }
     }
@@ -238,7 +238,7 @@ mod tests {
             Literal('d'),
             QuestionMark,
             Literal('e'),
-            Alter,
+            Pipe,
             Literal('f'),
             LParen,
             Literal('g'),
@@ -324,7 +324,7 @@ mod tests {
             Literal(','),
             Literal('3'),
             RCurlyBracket,
-            Alter,
+            Pipe,
             Literal('b'),
         ];
 
@@ -366,7 +366,7 @@ mod tests {
             Literal('-'),
             Literal('d'),
             RSquareBracket,
-            Alter,
+            Pipe,
             Literal('c'),
         ];
 

@@ -4,6 +4,7 @@ use serde::Serialize;
 use crate::nfa::Nfa;
 use crate::token::Token;
 use crate::TokenSequence;
+use std::collections::HashSet;
 use std::iter::{Enumerate, Peekable};
 use std::vec::IntoIter;
 
@@ -106,7 +107,7 @@ impl AstParser {
                     upper_bound: m,
                 })
             }
-            b => Err(SyntaxError::UnexpectedLiteral), //TODO: fix
+            _ => Err(SyntaxError::UnexpectedLiteral), //TODO: fix
         }
     }
 
@@ -128,6 +129,7 @@ impl AstParser {
         match self.next_token() {
             Some(Token::Literal(c)) => Ok(RegexAstNode::Literal(c)),
             Some(Token::Dot) => Ok(RegexAstNode::Wildcard),
+            Some(Token::RSquareBracket) => self.parse_square_bracket_expr(),
             Some(Token::LParen) => {
                 if let Some(Token::RParen) = self.peek_token() {
                     self.tokens.next();
@@ -152,6 +154,60 @@ impl AstParser {
 
             _ => Err(SyntaxError::UnexpectedLiteral),
         }
+    }
+
+    fn parse_square_bracket_expr(&mut self) -> Result<RegexAstNode, SyntaxError> {
+        let mut expr = HashSet::new();
+        let mut is_negated = false;
+
+        if self.peek_token() == Some(&Token::RSquareBracket) {
+            // handle POSIX classes
+        } else if self.peek_token() == Some(&Token::Literal('^')) {
+            is_negated = true;
+            self.next_token();
+        }
+
+        while let Some(token) = self.peek_token() {
+            if *token == Token::RSquareBracket {
+                break;
+            }
+
+            let start_token = self.next_token().unwrap();
+
+            if self.peek_token() == Some(&Token::Literal('-')) {
+                self.next_token();
+
+                if let Some(end_token) = self.peek_token().cloned() {
+                    if end_token != Token::RSquareBracket {
+                        self.next_token();
+
+                        let start_char = char::from(&start_token);
+                        let end_char = char::from(&end_token);
+
+                        if start_char > end_char {
+                            return Err(SyntaxError::InvalidRangeInCharacterSet);
+                        }
+
+                        for c_val in start_char as u32..=end_char as u32 {
+                            expr.insert(std::char::from_u32(c_val).unwrap());
+                        }
+                        continue;
+                    }
+                }
+
+                expr.insert(char::from(&start_token));
+                expr.insert('-');
+            } else {
+                expr.insert(char::from(&start_token));
+            }
+        }
+
+        let next = self.next_token();
+        if next != Some(Token::RSquareBracket) {
+            Err(SyntaxError::UnexpectedEndOfExpression)?
+        }
+
+        Ok(RegexAstNode::BracketExpression { is_negated, expr })
     }
 
     fn parse_bounded_quantifier(content: Vec<char>) -> Result<(u16, Option<u16>), SyntaxError> {
@@ -197,6 +253,10 @@ pub(crate) enum RegexAstNode {
         lower_bound: u16,
         upper_bound: Option<u16>,
     },
+    BracketExpression {
+        is_negated: bool,
+        expr: HashSet<char>,
+    },
     Literal(char),
     ZeroOrOne(Box<RegexAstNode>),
     OneOrMore(Box<RegexAstNode>),
@@ -240,6 +300,7 @@ impl RegexAstNode {
                 lower_bound,
                 upper_bound,
             } => Nfa::from_range(&node.to_nfa(), *lower_bound, *upper_bound),
+            RegexAstNode::BracketExpression { is_negated, expr } => todo!(),
         }
     }
 
@@ -255,7 +316,10 @@ impl RegexAstNode {
     fn is_quantifiable(&self) -> bool {
         !matches!(
             self,
-            RegexAstNode::Star(_) | RegexAstNode::OneOrMore(_) | RegexAstNode::ZeroOrOne(_)
+            RegexAstNode::Star(_)
+                | RegexAstNode::OneOrMore(_)
+                | RegexAstNode::ZeroOrOne(_)
+                | RegexAstNode::Repeat { .. }
         )
     }
 }
@@ -283,14 +347,13 @@ pub(crate) enum SyntaxError {
     QuantifierInvalidFormat,
     QuantifierInvalidNumber(String),
     QuantifierMinGreaterMax,
+    InvalidRangeInCharacterSet,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::token::Token::{
-        Alter, Dot, LCurlyBracket, LParen, Literal, Plus, QuestionMark, RCurlyBracket, RParen, Star,
-    };
+    use crate::token::Token::*;
     use lazy_static::lazy_static;
     use rstest::*;
 
@@ -609,6 +672,7 @@ mod tests {
             #[case("invalid_bounded_min_greater_than_max", vec![Literal('a'), LCurlyBracket, Literal('5'), Literal(','), Literal('2'), RCurlyBracket])] // a{5,2}
             #[case("invalid_bounded_non_numeric", vec![Literal('a'), LCurlyBracket, Literal('b'), RCurlyBracket])] // a{b}
             #[case("invalid_bounded_unclosed", vec![Literal('a'), LCurlyBracket, Literal('3')])] // a{3
+            #[case("invalid_starts_with_bounded", vec![LCurlyBracket, Literal('3'), RCurlyBracket])] // {3}
             fn invalid_cases(#[case] name: &str, #[case] tokens: Vec<Token>) {
                 let pattern_string = to_pattern_string(&tokens);
                 let ast_result = RegexAstNode::try_from(tokens);
@@ -692,6 +756,8 @@ mod tests {
             #[case("multiple_quantifiers_in_a_row_fails_case_1", vec![Literal('a'), Star, Plus])] // a*+
             #[case("multiple_quantifiers_in_a_row_fails_case_2", vec![Literal('a'), QuestionMark, Star])] // a?*
             #[case("multiple_quantifiers_in_a_row_fails_case_3", vec![Literal('a'), Plus, QuestionMark])] // a+?
+            #[case("multiple_quantifiers_in_a_row_fails_case_4", vec![Literal('a'), Plus, LCurlyBracket, Literal('3'), RCurlyBracket])] // a+{3}
+            #[case("multiple_quantifiers_in_a_row_fails_case_5", vec![Literal('a'), LCurlyBracket, Literal('3'), RCurlyBracket, Plus])] // a{3}+
             fn multiple_quantifiers_in_a_row_fails(#[case] name: &str, #[case] tokens: Vec<Token>) {
                 // when
                 let pattern_string = to_pattern_string(&tokens);
@@ -702,4 +768,91 @@ mod tests {
             }
         }
     }
+
+    /*
+    #[cfg(test)]
+    mod character_sets {
+        use super::*;
+
+        mod valid_syntax {
+            use super::*;
+
+            #[rstest]
+            // --- Basic Sets and Ranges ---
+            #[case("set_simple_literals", vec![LSquareBracket, Literal('a'), Literal('b'), Literal('c'), RSquareBracket])] // [abc]
+            #[case("set_numeric_range", vec![LSquareBracket, Literal('0'), Literal('-'), Literal('9'), RSquareBracket])] // [0-9]
+            #[case("set_lowercase_range", vec![LSquareBracket, Literal('a'), Literal('-'), Literal('z'), RSquareBracket])] // [a-z]
+            #[case("set_uppercase_range", vec![LSquareBracket, Literal('A'), Literal('-'), Literal('Z'), RSquareBracket])] // [A-Z]
+            #[case("set_mixed_ranges_and_literals", vec![LSquareBracket, Literal('A'), Literal('-'), Literal('F'), Literal('x'), Literal('0'), Literal('-'), Literal('9'), RSquareBracket])] // [A-Fx0-9]
+            #[case("set_single_char_range", vec![LSquareBracket, Literal('c'), Literal('-'), Literal('c'), RSquareBracket])] // [c-c]
+
+            // --- Negated Sets ---
+            #[case("negated_set_simple_literals", vec![LSquareBracket, Literal('^'), Literal('a'), Literal('b'), Literal('c'), RSquareBracket])] // [^abc]
+            #[case("negated_set_range", vec![LSquareBracket, Literal('^'), Literal('a'), Literal('-'), Literal('z'), RSquareBracket])] // [^a-z]
+
+            // --- Special Character Handling (as Literals) ---
+            #[case("literal_hyphen_at_start", vec![LSquareBracket, Literal('-'), Literal('a'), Literal('b'), RSquareBracket])] // [-ab]
+            #[case("literal_hyphen_at_end", vec![LSquareBracket, Literal('a'), Literal('b'), Literal('-'), RSquareBracket])] // [ab-]
+            #[case("literal_hyphen_after_negation", vec![LSquareBracket, Literal('^'), Literal('-'), Literal('a'), Literal('b'), RSquareBracket])] // [^-ab]
+            #[case("literal_caret_not_at_start", vec![LSquareBracket, Literal('a'), Literal('^'), Literal('b'), RSquareBracket])] // [a^b]
+            #[case("literal_closing_bracket_at_start", vec![LSquareBracket, RSquareBracket, Literal('a'), RSquareBracket])] // []a]
+            #[case("literal_closing_bracket_after_negation", vec![LSquareBracket, Literal('^'), RSquareBracket, Literal('a'), RSquareBracket])] // [^]a]
+
+            // --- Other Metacharacters Inside a Set ---
+            #[case("metacharacters_as_literals", vec![LSquareBracket, Star, Plus, QuestionMark, Dot, LParen, RParen, LCurlyBracket, RCurlyBracket, Alter, RSquareBracket])] // [*+?.(){}|]
+
+            // --- Escaped Characters Inside a Set ---
+            #[case("escaped_hyphen_in_middle", vec![LSquareBracket, Literal('a'), Literal('\\'), Literal('-'), Literal('b'), RSquareBracket])] // [a\-b]
+            #[case("escaped_caret_at_start", vec![LSquareBracket, Literal('\\'), Literal('^'), Literal('a'), Literal('b'), RSquareBracket])] // [\^ab]
+            #[case("escaped_closing_bracket", vec![LSquareBracket, Literal('a'), Literal('\\'), RSquareBracket, RSquareBracket])] // [a\]]
+            #[case("escaped_opening_bracket", vec![LSquareBracket, Literal('a'), Literal('\\'), LSquareBracket, RSquareBracket])] // [a\[]
+            #[case("escaped_backslash", vec![LSquareBracket, Literal('a'), Literal('\\'), Literal('\\'), Literal('b'), RSquareBracket])] // [a\\b]
+
+            // --- Quantifiable Sets ---
+            #[case("set_with_quantifier", vec![LSquareBracket, Literal('a'), Literal('b'), RSquareBracket, Plus])] // [ab]+
+            #[case("negated_set_with_quantifier", vec![LSquareBracket, Literal('^'), Literal('a'), RSquareBracket, Star])] // [^a]*
+            #[case("range_with_bounded_quantifier", vec![LSquareBracket, Literal('0'), Literal('-'), Literal('9'), RSquareBracket, LCurlyBracket, Literal('2'), Literal(','), Literal('4'), RCurlyBracket])] // [0-9]{2,4}
+            fn test_valid_sets(#[case] name: &str, #[case] tokens: Vec<Token>) {
+                let pattern_string = to_pattern_string(&tokens);
+                let ast_result = RegexAstNode::try_from(tokens);
+
+                INSTA_SETTINGS
+                    .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+            }
+        }
+
+        /// Groups tests for all invalid or malformed character set syntax.
+        mod invalid_syntax {
+            use super::*;
+
+            #[rstest]
+            #[case("unclosed_set", vec![LSquareBracket, Literal('a'), Literal('b')])] // [ab
+            #[case("unclosed_negated_set", vec![LSquareBracket, Literal('^'), Literal('a')])] // [^a
+            #[case("unclosed_set_with_range", vec![LSquareBracket, Literal('a'), Literal('-')])] // [a-
+            #[case("unclosed_set_dangling_escape", vec![LSquareBracket, Literal('a'), Literal('\\')])] // [a\
+            fn unclosed_sets_fail(#[case] name: &str, #[case] tokens: Vec<Token>) {
+                let pattern_string = to_pattern_string(&tokens);
+                let ast_result = RegexAstNode::try_from(tokens);
+                INSTA_SETTINGS
+                    .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+            }
+
+            #[rstest]
+            // Your requested cases
+            #[case("invalid_range_desc_alpha", vec![LSquareBracket, Literal('z'), Literal('-'), Literal('a'), RSquareBracket])] // [z-a]
+            #[case("invalid_range_lower_to_upper", vec![LSquareBracket, Literal('f'), Literal('-'), Literal('A'), RSquareBracket])] // [f-A]
+            #[case("invalid_range_alpha_to_digit", vec![LSquareBracket, Literal('z'), Literal('-'), Literal('0'), RSquareBracket])] // [z-0]
+            // Additional robust cases
+            #[case("invalid_range_desc_numeric", vec![LSquareBracket, Literal('9'), Literal('-'), Literal('0'), RSquareBracket])] // [9-0]
+            #[case("invalid_range_upper_to_lower", vec![LSquareBracket, Literal('Z'), Literal('-'), Literal('a'), RSquareBracket])] // [Z-a]
+            #[case("invalid_range_digit_to_alpha", vec![LSquareBracket, Literal('5'), Literal('-'), Literal('A'), RSquareBracket])] // [5-A]
+            fn invalid_ranges_fail(#[case] name: &str, #[case] tokens: Vec<Token>) {
+                let pattern_string = to_pattern_string(&tokens);
+                let ast_result = RegexAstNode::try_from(tokens);
+                INSTA_SETTINGS
+                    .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+            }
+        }
+    }
+    */
 }

@@ -1,0 +1,22 @@
+---
+source: regex/src/ast.rs
+expression: "(pattern_string, ast_result)"
+---
+- "[5-A]"
+- Ok:
+    BracketExpression:
+      is_negated: false
+      expr:
+        - "5"
+        - "6"
+        - "7"
+        - "8"
+        - "9"
+        - ":"
+        - ;
+        - "<"
+        - "="
+        - ">"
+        - "?"
+        - "@"
+        - A

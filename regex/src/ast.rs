@@ -809,6 +809,8 @@ mod tests {
             #[case("set_uppercase_range", vec![LSquareBracket, Literal('A'), Literal('-'), Literal('Z'), RSquareBracket])] // [A-Z]
             #[case("set_mixed_ranges_and_literals", vec![LSquareBracket, Literal('A'), Literal('-'), Literal('F'), Literal('x'), Literal('0'), Literal('-'), Literal('9'), RSquareBracket])] // [A-Fx0-9]
             #[case("set_single_char_range", vec![LSquareBracket, Literal('c'), Literal('-'), Literal('c'), RSquareBracket])] // [c-c]
+            #[case("valid_range_upper_to_lower", vec![LSquareBracket, Literal('Z'), Literal('-'), Literal('a'), RSquareBracket])] // [Z-a]
+            #[case("valid_range_digit_to_alpha", vec![LSquareBracket, Literal('5'), Literal('-'), Literal('A'), RSquareBracket])] // [5-A]
 
             // --- Negated Sets ---
             #[case("negated_set_simple_literals", vec![LSquareBracket, Caret, Literal('a'), Literal('b'), Literal('c'), RSquareBracket])] // [^abc]
@@ -848,39 +850,32 @@ mod tests {
             }
         }
 
-        /*
-                /// Groups tests for all invalid or malformed character set syntax.
-                mod invalid_syntax {
-                    use super::*;
+        mod invalid_syntax {
+            use super::*;
 
-                    #[rstest]
-                    #[case("unclosed_set", vec![LSquareBracket, Literal('a'), Literal('b')])] // [ab
-                    #[case("unclosed_negated_set", vec![LSquareBracket, Literal('^'), Literal('a')])] // [^a
-                    #[case("unclosed_set_with_range", vec![LSquareBracket, Literal('a'), Literal('-')])] // [a-
-                    #[case("unclosed_set_dangling_escape", vec![LSquareBracket, Literal('a'), BackSlash, Literal('\\')])] // [a\
-                    fn unclosed_sets_fail(#[case] name: &str, #[case] tokens: Vec<Token>) {
-                        let pattern_string = to_pattern_string(&tokens);
-                        let ast_result = RegexAstNode::try_from(tokens);
-                        INSTA_SETTINGS
-                            .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
-                    }
+            #[rstest]
+            #[case("unclosed_set", vec![LSquareBracket, Literal('a'), Literal('b')])] // [ab
+            #[case("unclosed_negated_set", vec![LSquareBracket, Literal('^'), Literal('a')])] // [^a
+            #[case("unclosed_set_with_range", vec![LSquareBracket, Literal('a'), Literal('-')])] // [a-
+            #[case("unclosed_set_dangling_escape", vec![LSquareBracket, Literal('a'), BackSlash, Literal('\\')])] // [a\
+            fn unclosed_sets_fail(#[case] name: &str, #[case] tokens: Vec<Token>) {
+                let pattern_string = to_pattern_string(&tokens);
+                let ast_result = RegexAstNode::try_from(tokens);
+                INSTA_SETTINGS
+                    .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+            }
 
-                    #[rstest]
-                    // Your requested cases
-                    #[case("invalid_range_desc_alpha", vec![LSquareBracket, Literal('z'), Literal('-'), Literal('a'), RSquareBracket])] // [z-a]
-                    #[case("invalid_range_lower_to_upper", vec![LSquareBracket, Literal('f'), Literal('-'), Literal('A'), RSquareBracket])] // [f-A]
-                    #[case("invalid_range_alpha_to_digit", vec![LSquareBracket, Literal('z'), Literal('-'), Literal('0'), RSquareBracket])] // [z-0]
-                    // Additional robust cases
-                    #[case("invalid_range_desc_numeric", vec![LSquareBracket, Literal('9'), Literal('-'), Literal('0'), RSquareBracket])] // [9-0]
-                    #[case("invalid_range_upper_to_lower", vec![LSquareBracket, Literal('Z'), Literal('-'), Literal('a'), RSquareBracket])] // [Z-a]
-                    #[case("invalid_range_digit_to_alpha", vec![LSquareBracket, Literal('5'), Literal('-'), Literal('A'), RSquareBracket])] // [5-A]
-                    fn invalid_ranges_fail(#[case] name: &str, #[case] tokens: Vec<Token>) {
-                        let pattern_string = to_pattern_string(&tokens);
-                        let ast_result = RegexAstNode::try_from(tokens);
-                        INSTA_SETTINGS
-                            .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
-                    }
-                }
-        */
+            #[rstest]
+            #[case("invalid_range_desc_alpha", vec![LSquareBracket, Literal('z'), Literal('-'), Literal('a'), RSquareBracket])] // [z-a]
+            #[case("invalid_range_lower_to_upper", vec![LSquareBracket, Literal('f'), Literal('-'), Literal('A'), RSquareBracket])] // [f-A]
+            #[case("invalid_range_alpha_to_digit", vec![LSquareBracket, Literal('z'), Literal('-'), Literal('0'), RSquareBracket])] // [z-0]
+            #[case("invalid_range_desc_numeric", vec![LSquareBracket, Literal('9'), Literal('-'), Literal('0'), RSquareBracket])] // [9-0]
+            fn invalid_ranges_fail(#[case] name: &str, #[case] tokens: Vec<Token>) {
+                let pattern_string = to_pattern_string(&tokens);
+                let ast_result = RegexAstNode::try_from(tokens);
+                INSTA_SETTINGS
+                    .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+            }
+        }
     }
 }

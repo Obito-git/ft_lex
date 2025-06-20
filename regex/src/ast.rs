@@ -858,6 +858,8 @@ mod tests {
 
             #[rstest]
             #[case("unclosed_set", vec![LSquareBracket, Literal('a'), Literal('b')])] // [ab
+            #[case("empty_set", vec![LSquareBracket, RSquareBracket])] // []
+            #[case("empty_negated_set", vec![LSquareBracket, Caret, RSquareBracket])] // [^]
             #[case("unclosed_negated_set", vec![LSquareBracket, Literal('^'), Literal('a')])] // [^a
             #[case("unclosed_set_with_range", vec![LSquareBracket, Literal('a'), Literal('-')])] // [a-
             #[case("unclosed_set_dangling_escape", vec![LSquareBracket, Literal('a'), BackSlash, Literal('\\')])] // [a\

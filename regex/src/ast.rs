@@ -46,11 +46,9 @@ impl AstParser {
     fn parse_concatenation(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let mut left_node = self.parse_quantifier()?;
 
-        while self
-            .seq
-            .peek()
-            .map_or(false, |t| matches!(t, Token::Literal(_) | Token::LParen))
-        {
+        while self.seq.peek().map_or(false, |t| {
+            matches!(t, Token::Literal(_) | Token::LParen | Token::RSquareBracket)
+        }) {
             let right_node = self.parse_quantifier()?;
             left_node = RegexAstNode::Concat(Box::new(left_node), Box::new(right_node));
         }
@@ -128,6 +126,7 @@ impl AstParser {
             Token::Literal(c) => Ok(RegexAstNode::Literal(c)),
             Token::Dot => Ok(RegexAstNode::Wildcard),
             Token::LSquareBracket => self.parse_square_bracket_expr(),
+            Token::RSquareBracket => Ok(RegexAstNode::Literal(']')),
             Token::LParen => {
                 if let Some(Token::RParen) = self.seq.peek() {
                     self.seq.next();
@@ -154,10 +153,16 @@ impl AstParser {
         let mut expr = HashSet::new();
         let mut is_negated = false;
 
-        if self.seq.peek() == Some(&Token::RSquareBracket) {
+        if let Some(Token::LSquareBracket) = self.seq.peek() {
             // handle POSIX classes
-        } else if self.seq.peek() == Some(&Token::Caret) {
+        } else if let Some(Token::Caret) = self.seq.peek() {
             is_negated = true;
+            self.seq.next();
+        }
+
+        // in PCRE if ] is the first char it is treated as literal
+        if let Some(Token::RSquareBracket) = self.seq.peek() {
+            expr.insert(']');
             self.seq.next();
         }
 
@@ -168,7 +173,7 @@ impl AstParser {
 
             let start_token = self.seq.next().unwrap();
 
-            if self.seq.peek() == Some(&Token::Literal('-')) {
+            if let Some(Token::Literal('-')) = self.seq.peek() {
                 self.seq.next();
 
                 // the '-' was escaped means it is not range
@@ -249,7 +254,10 @@ impl AstParser {
 }
 
 #[cfg(test)]
-fn sort_set<S, T, H>(value: &HashSet<T, H>, serializer: S) -> Result<S::Ok, S::Error>
+fn sort_set<S, T, H>(
+    value: &std::collections::HashSet<T, H>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
     T: Ord + Serialize,

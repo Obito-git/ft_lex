@@ -811,6 +811,8 @@ mod tests {
             #[case("set_single_char_range", vec![LSquareBracket, Literal('c'), Literal('-'), Literal('c'), RSquareBracket])] // [c-c]
             #[case("valid_range_upper_to_lower", vec![LSquareBracket, Literal('Z'), Literal('-'), Literal('a'), RSquareBracket])] // [Z-a]
             #[case("valid_range_digit_to_alpha", vec![LSquareBracket, Literal('5'), Literal('-'), Literal('A'), RSquareBracket])] // [5-A]
+            #[case("two_brackets_with_alteration", vec![LSquareBracket, Literal('Z'), Literal('-'), Literal('a'), RSquareBracket,
+                Pipe, LSquareBracket, Literal('c'), Literal('-'), Literal('f'), RSquareBracket])] // [Z-a]|[c-f]
 
             // --- Negated Sets ---
             #[case("negated_set_simple_literals", vec![LSquareBracket, Caret, Literal('a'), Literal('b'), Literal('c'), RSquareBracket])] // [^abc]
@@ -838,6 +840,7 @@ mod tests {
             #[case("set_with_quantifier", vec![LSquareBracket, Literal('a'), Literal('b'), RSquareBracket, Plus])] // [ab]+
             #[case("negated_set_with_quantifier", vec![LSquareBracket, Caret, Literal('a'), RSquareBracket, Star])] // [^a]*
             #[case("range_with_bounded_quantifier", vec![LSquareBracket, Literal('0'), Literal('-'), Literal('9'), RSquareBracket, LCurlyBracket, Literal('2'), Literal(','), Literal('4'), RCurlyBracket])] // [0-9]{2,4}
+            #[case("range_in_parent_with_alter_and_start", vec![LParen, LSquareBracket, Literal('Z'), Literal('-'), Literal('a'), RSquareBracket, Pipe, Literal('2'), RParen, Star])] // ([Z-a]|2)*
             fn test_valid_sets(#[case] name: &str, #[case] tokens: Vec<Token>) {
                 if name == "escaped_hyphen_in_middle" {
                     println!()
@@ -858,6 +861,9 @@ mod tests {
             #[case("unclosed_negated_set", vec![LSquareBracket, Literal('^'), Literal('a')])] // [^a
             #[case("unclosed_set_with_range", vec![LSquareBracket, Literal('a'), Literal('-')])] // [a-
             #[case("unclosed_set_dangling_escape", vec![LSquareBracket, Literal('a'), BackSlash, Literal('\\')])] // [a\
+            #[case("unclosed_bracket_in_parent", vec![LParen, LSquareBracket, Literal('Z'), Literal('-'), Literal('a')])] // ([Z-a
+            #[case("unclosed_bracket_in_parent_2", vec![LParen, LSquareBracket, Literal('Z'), Literal('-'), Literal('a'), RSquareBracket,
+                Pipe, LSquareBracket, Literal('Z'), Literal('-'), Literal('a')])] // ([Z-a]|[Z-a
             fn unclosed_sets_fail(#[case] name: &str, #[case] tokens: Vec<Token>) {
                 let pattern_string = to_pattern_string(&tokens);
                 let ast_result = RegexAstNode::try_from(tokens);

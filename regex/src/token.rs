@@ -1,10 +1,6 @@
 #[cfg(test)]
 use serde::Serialize;
-use std::{
-    fmt::{Display, Formatter},
-    iter::{Enumerate, Peekable},
-    vec::IntoIter,
-};
+use std::fmt::{Display, Formatter};
 
 // TODO: refactor all errors
 #[derive(Debug, PartialEq)]
@@ -12,7 +8,7 @@ pub enum TokenParsingErr {
     EscapedNothing,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(test, derive(Serialize))]
 pub(crate) enum Token {
     BackSlash,
@@ -28,21 +24,15 @@ pub(crate) enum Token {
     RCurlyBracket,
     LSquareBracket,
     RSquareBracket,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct TokenSequence {
-    tokens: Peekable<Enumerate<IntoIter<Token>>>,
-    original_pattern: String,
-    cur_idx: usize,
+    Caret,
 }
 
 impl Token {
     pub fn is_quantifier(&self) -> bool {
-        match self {
-            Token::Star | Token::Plus | Token::QuestionMark | Token::LCurlyBracket => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            Token::Star | Token::Plus | Token::QuestionMark | Token::LCurlyBracket
+        )
     }
 
     pub fn is_literal(&self) -> bool {
@@ -50,72 +40,70 @@ impl Token {
     }
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct TokenSequence {
+    tokens: Vec<Token>,
+    pos: usize,
+    last_was_escaped: bool,
+}
+
+//TODO: can't say I'm happy with it, but it simplifies life in AST. think again
 impl TokenSequence {
     pub fn new(tokens: Vec<Token>) -> Self {
-        let original_pattern = tokens.iter().map(char::from).collect();
-
         Self {
-            tokens: tokens.into_iter().enumerate().peekable(),
-            original_pattern,
-            cur_idx: 0,
+            tokens,
+            pos: 0,
+            last_was_escaped: false,
         }
     }
 
-    fn skip_escape(&mut self) {
-        while self
-            .tokens
-            .peek()
-            .map(|(_, token)| token == &Token::BackSlash)
-            .unwrap_or(false)
-        {
-            self.cur_idx += 1;
-            self.tokens.next();
-        }
-    }
-
-    pub fn next(&mut self) -> Option<Token> {
-        self.skip_escape();
-        if let Some((idx, token)) = self.tokens.next() {
-            self.cur_idx = idx;
-            Some(token)
-        } else {
-            None
-        }
-    }
-    pub fn next_enumerated(&mut self) -> Option<(usize, Token)> {
-        self.skip_escape();
-        if let Some((idx, token)) = self.tokens.next() {
-            self.cur_idx = idx;
-            Some((idx, token))
-        } else {
-            None
-        }
-    }
-
-    pub fn peek(&mut self) -> Option<&Token> {
-        self.skip_escape();
-        if let Some((_, token)) = self.tokens.peek() {
-            Some(token)
-        } else {
-            None
-        }
-    }
-
-    pub fn peek_enumerated(&mut self) -> Option<(usize, &Token)> {
-        self.skip_escape();
-        if let Some((idx, token)) = self.tokens.peek() {
-            Some((*idx, token))
-        } else {
-            None
-        }
+    pub fn previous_token_was_backslash(&self) -> bool {
+        self.last_was_escaped
     }
 
     pub fn cur_pos(&self) -> usize {
-        self.cur_idx
+        self.pos
+    }
+
+    pub fn peek_enumerated(&self) -> Option<(usize, &Token)> {
+        if let Some(token) = self.tokens.get(self.pos) {
+            if token == &Token::BackSlash {
+                self.tokens.get(self.pos + 1).map(|t| (self.pos + 1, t))
+            } else {
+                Some((self.pos, token))
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn next_enumerated(&mut self) -> Option<(usize, Token)> {
+        self.last_was_escaped = false;
+
+        let token_index = if self.tokens.get(self.pos) == Some(&Token::BackSlash) {
+            self.last_was_escaped = true;
+            self.pos + 1
+        } else {
+            self.pos
+        };
+
+        let token_to_return = self.tokens.get(token_index)?;
+
+        self.pos = token_index + 1;
+
+        Some((token_index, *token_to_return))
+    }
+
+    pub fn peek(&self) -> Option<&Token> {
+        self.peek_enumerated().map(|(_index, token)| token)
+    }
+
+    pub fn next(&mut self) -> Option<Token> {
+        self.next_enumerated().map(|(_index, token)| token)
     }
 
     pub fn collect(&mut self) -> Vec<Token> {
-        let mut res = Vec::with_capacity(self.original_pattern.len());
+        let mut res = Vec::new();
         while let Some(tok) = self.next() {
             res.push(tok);
         }
@@ -151,6 +139,7 @@ impl From<&Token> for char {
             Token::LSquareBracket => '[',
             Token::RSquareBracket => ']',
             Token::BackSlash => '\\',
+            Token::Caret => '^',
         }
     }
 }
@@ -195,6 +184,7 @@ impl From<char> for Token {
             '(' => Token::LParen,
             ')' => Token::RParen,
             '|' => Token::Pipe,
+            '^' => Token::Caret,
             _ => Token::Literal(value),
         }
     }
@@ -213,16 +203,13 @@ mod tests {
         let mut iter_count = 0usize;
 
         // when && then
-        while let Some(token) = sequence.next() {
-            assert_eq!(
-                pattern.chars().nth(sequence.cur_idx).unwrap(),
-                char::from(token)
-            );
+        while let Some((pos, token)) = sequence.next_enumerated() {
+            assert_eq!(pattern.chars().nth(pos).unwrap(), char::from(token));
             iter_count += 1;
         }
 
         // then
-        assert!(iter_count != 0);
+        assert_ne!(iter_count, 0);
     }
     #[test]
     fn test_parsing_of_all_special_tokens() {

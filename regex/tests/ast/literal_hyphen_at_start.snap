@@ -1,0 +1,12 @@
+---
+source: regex/src/ast.rs
+expression: "(pattern_string, ast_result)"
+---
+- "[-ab]"
+- Ok:
+    BracketExpression:
+      is_negated: false
+      expr:
+        - "-"
+        - a
+        - b

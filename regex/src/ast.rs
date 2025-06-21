@@ -290,6 +290,8 @@ pub(crate) enum RegexAstNode {
 }
 
 impl RegexAstNode {
+    // TODO: decide if I want to use self of &self. Probably I can drop reference cause the ast is
+    // not used after building the nfa?
     pub(crate) fn to_nfa(&self) -> Nfa {
         match self {
             RegexAstNode::Literal(c) => Nfa::from_char(*c),
@@ -322,7 +324,9 @@ impl RegexAstNode {
                 lower_bound,
                 upper_bound,
             } => Nfa::from_range(&node.to_nfa(), *lower_bound, *upper_bound),
-            RegexAstNode::BracketExpression { is_negated, expr } => todo!(),
+            RegexAstNode::BracketExpression { is_negated, expr } => {
+                Nfa::from_char_set(*is_negated, expr)
+            }
         }
     }
 

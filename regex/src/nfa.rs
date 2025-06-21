@@ -1,10 +1,11 @@
 use std::collections::{HashSet, VecDeque};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum TransitionKind {
     Symbol(char),
     Epsilon,
     Wildcard,
+    WildcardExcept(HashSet<char>),
 }
 
 #[derive(Clone)]
@@ -24,10 +25,11 @@ pub(crate) struct Nfa {
 
 impl NfaTransition {
     fn matches(&self, c: char) -> bool {
-        match self.kind {
-            TransitionKind::Symbol(symbol) => symbol == c,
+        match &self.kind {
+            TransitionKind::Symbol(symbol) => *symbol == c,
             TransitionKind::Epsilon => false,
             TransitionKind::Wildcard => c != '\n',
+            TransitionKind::WildcardExcept(set) => !set.contains(&c),
         }
     }
 
@@ -73,6 +75,22 @@ impl Nfa {
         nfa
     }
 
+    pub fn from_char_set(is_negated: bool, set: &HashSet<char>) -> Self {
+        let mut nfa = Self::new();
+        let start = nfa.start_state;
+        let accept = nfa.accept_state;
+
+        if !is_negated {
+            for c in set {
+                nfa.add_transition(start, accept, TransitionKind::Symbol(*c));
+            }
+        } else {
+            nfa.add_transition(start, accept, TransitionKind::WildcardExcept(set.clone()));
+        }
+
+        nfa
+    }
+
     pub fn concatenate(&mut self, other: &Self) {
         let offset = self.states_count;
         let old_accept = self.accept_state;
@@ -82,7 +100,7 @@ impl Nfa {
 
         // merge transitions but update including offsets
         for t in &other.transitions {
-            self.add_transition(t.start + offset, t.end + offset, t.kind);
+            self.add_transition(t.start + offset, t.end + offset, t.kind.clone());
         }
 
         // connect two machines using the epsilon
@@ -105,7 +123,7 @@ impl Nfa {
 
         // merge transitions but update including offsets
         for t in &other.transitions {
-            self.add_transition(t.start + offset, t.end + offset, t.kind);
+            self.add_transition(t.start + offset, t.end + offset, t.kind.clone());
         }
 
         // add new state and make it new start state
@@ -1073,6 +1091,228 @@ mod tests {
             ) {
                 let nfa = nfa_from_range(c, n, Some(m));
                 assert!(!nfa.accepts(input));
+            }
+        }
+    }
+
+    mod character_set {
+        use super::*;
+        use std::collections::HashSet;
+
+        mod positive_sets {
+            use super::*;
+
+            #[rstest]
+            // Simple set
+            #[case(HashSet::from(['a', 'b', 'c']), "a")]
+            #[case(HashSet::from(['a', 'b', 'c']), "c")]
+            #[case(HashSet::from(['0', '1', '2', '3']), "2")]
+            #[case(HashSet::from(['*', '+', '.']), ".")]
+            #[case(HashSet::from(['*', '+', '.']), "*")]
+            fn should_match_any_single_char_from_the_set(
+                #[case] set: HashSet<char>,
+                #[case] input: &str,
+            ) {
+                // given
+                let nfa = Nfa::from_char_set(false, &set);
+                // then
+                assert!(nfa.accepts(input));
+            }
+
+            #[rstest]
+            #[case(HashSet::from(['a', 'b', 'c']), "d")]
+            #[case(HashSet::from(['0', '1', '2']), "3")]
+            #[case(HashSet::from(['a', 'b']), "*")]
+            fn should_not_match_any_char_outside_the_set(
+                #[case] set: HashSet<char>,
+                #[case] input: &str,
+            ) {
+                // given
+                let nfa = Nfa::from_char_set(false, &set);
+                // then
+                assert!(!nfa.accepts(input));
+            }
+
+            #[rstest]
+            #[case(HashSet::from(['a', 'b', 'c']), "ab")]
+            #[case(HashSet::from(['a', 'b', 'c']), "aa")]
+            #[case(HashSet::from(['a', 'b', 'c']), "")]
+            fn should_not_match_multi_char_or_empty_strings(
+                #[case] set: HashSet<char>,
+                #[case] input: &str,
+            ) {
+                // given
+                let nfa = Nfa::from_char_set(false, &set);
+                // then
+                assert!(!nfa.accepts(input));
+            }
+        }
+
+        mod with_other_operations {
+            use super::*;
+
+            #[test]
+            fn should_work_with_concatenation() {
+                // given: an NFA for `[ab]c`
+                let set = HashSet::from(['a', 'b']);
+                let mut nfa = Nfa::from_char_set(false, &set);
+                let nfa_c = Nfa::from_char('c');
+                nfa.concatenate(&nfa_c);
+
+                // then
+                assert!(nfa.accepts("ac"));
+                assert!(nfa.accepts("bc"));
+                assert!(!nfa.accepts("c"));
+                assert!(!nfa.accepts("abc"));
+            }
+
+            #[test]
+            fn should_work_with_alternation() {
+                // given: an NFA for `[ab]|c`
+                let set = HashSet::from(['a', 'b']);
+                let mut nfa = Nfa::from_char_set(false, &set);
+                let nfa_c = Nfa::from_char('c');
+                nfa.alternate(&nfa_c);
+
+                // then
+                assert!(nfa.accepts("a"));
+                assert!(nfa.accepts("b"));
+                assert!(nfa.accepts("c"));
+                assert!(!nfa.accepts("d"));
+                assert!(!nfa.accepts("ac"));
+            }
+
+            #[test]
+            fn should_work_with_kleene_star() {
+                // given: an NFA for `[ab]*`
+                let set = HashSet::from(['a', 'b']);
+                let mut nfa = Nfa::from_char_set(false, &set);
+                nfa.kleene_star();
+
+                // then
+                assert!(nfa.accepts(""));
+                assert!(nfa.accepts("a"));
+                assert!(nfa.accepts("b"));
+                assert!(nfa.accepts("aa"));
+                assert!(nfa.accepts("bb"));
+                assert!(nfa.accepts("ab"));
+                assert!(nfa.accepts("baba"));
+                assert!(!nfa.accepts("c"));
+                assert!(!nfa.accepts("ac"));
+            }
+
+            #[test]
+            fn should_work_with_one_or_more() {
+                // given: an NFA for `[ab]+`
+                let set = HashSet::from(['a', 'b']);
+                let mut nfa = Nfa::from_char_set(false, &set);
+                nfa.one_or_more();
+
+                // then
+                assert!(nfa.accepts("a"));
+                assert!(nfa.accepts("b"));
+                assert!(nfa.accepts("ababa"));
+                assert!(!nfa.accepts(""));
+                assert!(!nfa.accepts("c"));
+            }
+
+            #[test]
+            fn should_work_with_zero_or_one() {
+                // given: an NFA for `[ab]?`
+                let set = HashSet::from(['a', 'b']);
+                let mut nfa = Nfa::from_char_set(false, &set);
+                nfa.zero_or_one();
+
+                // then
+                assert!(nfa.accepts(""));
+                assert!(nfa.accepts("a"));
+                assert!(nfa.accepts("b"));
+                assert!(!nfa.accepts("aa"));
+                assert!(!nfa.accepts("c"));
+            }
+        }
+
+        mod negated_sets {
+            use super::*;
+            use std::collections::HashSet;
+
+            #[rstest]
+            #[case(HashSet::from(['a', 'b', 'c']), "d")]
+            #[case(HashSet::from(['A', 'B', 'C']), "a")]
+            #[case(HashSet::from(['0', '1', '2']), "9")]
+            #[case(HashSet::from(['a', 'b']), "\n")]
+            #[case(HashSet::from(['a', 'b']), "*")]
+            fn should_match_any_single_char_outside_the_set(
+                #[case] set: HashSet<char>,
+                #[case] input: &str,
+            ) {
+                // given
+                let nfa = Nfa::from_char_set(true, &set);
+                // then
+                assert!(nfa.accepts(input));
+            }
+
+            #[rstest]
+            #[case(HashSet::from(['a', 'b', 'c']), "a")]
+            #[case(HashSet::from(['a', 'b', 'c']), "b")]
+            #[case(HashSet::from(['d', 'e', 'f']), "f")]
+            #[case(HashSet::from(['*', '+', '?']), "*")]
+            fn should_not_match_any_char_from_the_set(
+                #[case] set: HashSet<char>,
+                #[case] input: &str,
+            ) {
+                // given
+                let nfa = Nfa::from_char_set(true, &set);
+                // then
+                assert!(!nfa.accepts(input));
+            }
+
+            #[rstest]
+            #[case(HashSet::from(['a']), "xy")]
+            #[case(HashSet::from(['b']), "zz")]
+            #[case(HashSet::from(['c']), "")]
+            fn should_not_match_multi_char_or_empty_strings(
+                #[case] set: HashSet<char>,
+                #[case] input: &str,
+            ) {
+                // given
+                let nfa = Nfa::from_char_set(true, &set);
+                // then
+                assert!(!nfa.accepts(input));
+            }
+
+            #[test]
+            fn should_work_with_concatenation() {
+                // given: an NFA for `[^a]c`
+                let set = HashSet::from(['a']);
+                let mut nfa = Nfa::from_char_set(true, &set);
+                nfa.concatenate(&Nfa::from_char('c'));
+
+                // then
+                assert!(nfa.accepts("bc"));
+                assert!(nfa.accepts("xc"));
+                assert!(nfa.accepts(".c"));
+                assert!(!nfa.accepts("ac"));
+                assert!(!nfa.accepts("c"));
+                assert!(!nfa.accepts("bbc"));
+            }
+
+            #[test]
+            fn should_work_with_kleene_star() {
+                // given: an NFA for `[^ab]*` (zero or more chars that are not 'a' or 'b')
+                let set = HashSet::from(['a', 'b']);
+                let mut nfa = Nfa::from_char_set(true, &set);
+                nfa.kleene_star();
+
+                // then
+                assert!(nfa.accepts(""));
+                assert!(nfa.accepts("c"));
+                assert!(nfa.accepts("xyz"));
+                assert!(nfa.accepts("123_@#$"));
+                assert!(!nfa.accepts("a"));
+                assert!(!nfa.accepts("b"));
+                assert!(!nfa.accepts("ca"));
+                assert!(!nfa.accepts("ab"));
             }
         }
     }

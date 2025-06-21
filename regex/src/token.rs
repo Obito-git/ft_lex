@@ -25,6 +25,8 @@ pub(crate) enum Token {
     LSquareBracket,
     RSquareBracket,
     Caret,
+    Colon,
+    Dash,
 }
 
 impl Token {
@@ -38,50 +40,55 @@ impl Token {
     pub fn is_literal(&self) -> bool {
         matches!(self, Token::Literal(_))
     }
+
+    pub fn is_atom_start(&self) -> bool {
+        matches!(
+            self,
+            Token::Literal(_)
+                | Token::Dot
+                | Token::LParen
+                | Token::LSquareBracket
+                | Token::Colon
+                | Token::Dash
+                | Token::RSquareBracket
+        )
+    }
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct TokenSequence {
+    //TODO: or iterator?
     tokens: Vec<Token>,
     pos: usize,
-    last_was_escaped: bool,
 }
 
-//TODO: can't say I'm happy with it, but it simplifies life in AST. think again
 impl TokenSequence {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self {
-            tokens,
-            pos: 0,
-            last_was_escaped: false,
-        }
-    }
-
-    pub fn previous_token_was_backslash(&self) -> bool {
-        self.last_was_escaped
+        Self { tokens, pos: 0 }
     }
 
     pub fn cur_pos(&self) -> usize {
         self.pos
     }
 
-    pub fn peek_enumerated(&self) -> Option<(usize, &Token)> {
-        if let Some(token) = self.tokens.get(self.pos) {
+    fn peek_enumerated_nth(&self, pos: usize) -> Option<(usize, &Token)> {
+        if let Some(token) = self.tokens.get(pos) {
             if token == &Token::BackSlash {
-                self.tokens.get(self.pos + 1).map(|t| (self.pos + 1, t))
+                self.tokens.get(pos + 1).map(|t| (pos + 1, t))
             } else {
-                Some((self.pos, token))
+                Some((pos, token))
             }
         } else {
             None
         }
     }
 
-    pub fn next_enumerated(&mut self) -> Option<(usize, Token)> {
-        self.last_was_escaped = false;
+    pub fn peek_enumerated(&self) -> Option<(usize, &Token)> {
+        self.peek_enumerated_nth(self.pos)
+    }
 
+    pub fn next_enumerated(&mut self) -> Option<(usize, Token)> {
         let token_index = if self.tokens.get(self.pos) == Some(&Token::BackSlash) {
-            self.last_was_escaped = true;
             self.pos + 1
         } else {
             self.pos
@@ -96,6 +103,14 @@ impl TokenSequence {
 
     pub fn peek(&self) -> Option<&Token> {
         self.peek_enumerated().map(|(_index, token)| token)
+    }
+
+    pub fn peek_two(&self) -> (Option<&Token>, Option<&Token>) {
+        (
+            self.peek_enumerated_nth(self.pos).map(|(_, token)| token),
+            self.peek_enumerated_nth(self.pos + 1)
+                .map(|(_, token)| token),
+        )
     }
 
     pub fn next(&mut self) -> Option<Token> {
@@ -140,6 +155,8 @@ impl From<&Token> for char {
             Token::RSquareBracket => ']',
             Token::BackSlash => '\\',
             Token::Caret => '^',
+            Token::Colon => ':',
+            Token::Dash => '-',
         }
     }
 }
@@ -185,6 +202,8 @@ impl From<char> for Token {
             ')' => Token::RParen,
             '|' => Token::Pipe,
             '^' => Token::Caret,
+            ':' => Token::Colon,
+            '-' => Token::Dash,
             _ => Token::Literal(value),
         }
     }
@@ -214,7 +233,7 @@ mod tests {
     #[test]
     fn test_parsing_of_all_special_tokens() {
         // given
-        let pattern = r"a.b*c+d?e|f(g){2}[\.i]";
+        let pattern = r"a.b*c+d?e|f(g){2}[\.i]-:{}";
         let expected = vec![
             Literal('a'),
             Dot,
@@ -237,6 +256,10 @@ mod tests {
             Literal('.'),
             Literal('i'),
             RSquareBracket,
+            Dash,
+            Colon,
+            LCurlyBracket,
+            RCurlyBracket,
         ];
 
         // when
@@ -249,7 +272,7 @@ mod tests {
     #[test]
     fn test_parsing_with_escaped_special_characters() {
         // given
-        let pattern = r"a\.b\*c\+d\?e\|f\(g\)";
+        let pattern = r"a\.b\*c\+d\?e\|f\(g\)\:\-\[\]\{\}";
         let expected = vec![
             Literal('a'),
             Literal('.'),
@@ -265,6 +288,12 @@ mod tests {
             Literal('('),
             Literal('g'),
             Literal(')'),
+            Literal(':'),
+            Literal('-'),
+            Literal('['),
+            Literal(']'),
+            Literal('{'),
+            Literal('}'),
         ];
 
         // when
@@ -350,7 +379,7 @@ mod tests {
             Literal('a'),
             LSquareBracket,
             Literal('b'),
-            Literal('-'),
+            Dash,
             Literal('d'),
             RSquareBracket,
             Pipe,
@@ -372,7 +401,7 @@ mod tests {
             Literal('a'),
             Literal('['),
             Literal('b'),
-            Literal('-'),
+            Dash,
             Literal('d'),
             Literal(']'),
         ];

@@ -1,0 +1,9 @@
+---
+source: regex/src/ast.rs
+expression: "(pattern_string, ast_result)"
+---
+- "[[::]]"
+- Err:
+    UnknownPosixClassName:
+      - 3
+      - ""

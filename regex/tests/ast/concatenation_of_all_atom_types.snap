@@ -1,0 +1,20 @@
+---
+source: regex/src/ast.rs
+expression: "(pattern_string, ast_result)"
+---
+- "a.(b)[c]-:"
+- Ok:
+    Concat:
+      - Concat:
+          - Concat:
+              - Concat:
+                  - Concat:
+                      - Literal: a
+                      - Wildcard
+                  - Literal: b
+              - BracketExpression:
+                  is_negated: false
+                  expr:
+                    - c
+          - Literal: "-"
+      - Literal: ":"

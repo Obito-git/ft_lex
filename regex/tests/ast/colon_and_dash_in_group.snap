@@ -1,0 +1,15 @@
+---
+source: regex/src/ast.rs
+expression: "(pattern_string, ast_result)"
+---
+- "(x-y:z)"
+- Ok:
+    Concat:
+      - Concat:
+          - Concat:
+              - Concat:
+                  - Literal: x
+                  - Literal: "-"
+              - Literal: y
+          - Literal: ":"
+      - Literal: z

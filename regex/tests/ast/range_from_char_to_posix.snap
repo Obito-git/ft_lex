@@ -1,0 +1,7 @@
+---
+source: regex/src/ast.rs
+expression: "(pattern_string, ast_result)"
+---
+- "[a-[:digit:]]"
+- Err:
+    RangeIsForbiddenForPosixClasses: 3

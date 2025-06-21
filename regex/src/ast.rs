@@ -4,7 +4,7 @@ use serde::{Serialize, Serializer};
 use crate::nfa::Nfa;
 use crate::token::Token;
 use crate::TokenSequence;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
 
 struct AstParser {
     seq: TokenSequence,
@@ -46,9 +46,7 @@ impl AstParser {
     fn parse_concatenation(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let mut left_node = self.parse_quantifier()?;
 
-        while self.seq.peek().map_or(false, |t| {
-            matches!(t, Token::Literal(_) | Token::LParen | Token::RSquareBracket)
-        }) {
+        while self.seq.peek().map_or(false, |t| t.is_atom_start()) {
             let right_node = self.parse_quantifier()?;
             left_node = RegexAstNode::Concat(Box::new(left_node), Box::new(right_node));
         }
@@ -124,6 +122,8 @@ impl AstParser {
         }
         match token {
             Token::Literal(c) => Ok(RegexAstNode::Literal(c)),
+            Token::Colon => Ok(RegexAstNode::Literal(':')),
+            Token::Dash => Ok(RegexAstNode::Literal('-')),
             Token::Dot => Ok(RegexAstNode::Wildcard),
             Token::LSquareBracket => self.parse_square_bracket_expr(),
             Token::RSquareBracket => Ok(RegexAstNode::Literal(']')),
@@ -149,13 +149,34 @@ impl AstParser {
         }
     }
 
+    fn parse_posix_class(&mut self) -> Result<PosixClass, SyntaxError> {
+        let mut class_name = String::new();
+        let class_name_start_pos = self.seq.cur_pos();
+
+        while let Some(token) = self.seq.next() {
+            if matches!(token, Token::Colon) {
+                break;
+            }
+            class_name.push(token.into());
+        }
+
+        let next = self.seq.next();
+        if next != Some(Token::RSquareBracket) {
+            Err(SyntaxError::ExpectedEndOfPosixClassSyntax(
+                self.seq.cur_pos(),
+                next.map(char::from),
+            ))?
+        }
+
+        PosixClass::try_from(class_name.as_str())
+            .map_err(|_| SyntaxError::UnknownPosixClassName(class_name_start_pos, class_name))
+    }
+
     fn parse_square_bracket_expr(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let mut expr = HashSet::new();
         let mut is_negated = false;
 
-        if let Some(Token::LSquareBracket) = self.seq.peek() {
-            // handle POSIX classes
-        } else if let Some(Token::Caret) = self.seq.peek() {
+        if let Some(Token::Caret) = self.seq.peek() {
             is_negated = true;
             self.seq.next();
         }
@@ -170,17 +191,26 @@ impl AstParser {
             if *token == Token::RSquareBracket {
                 break;
             }
+            if let (Some(Token::LSquareBracket), Some(Token::Colon)) = self.seq.peek_two() {
+                self.seq.next();
+                self.seq.next();
+                let posix_class = self.parse_posix_class()?;
+                expr.extend(HashSet::<char>::from(&posix_class));
+                if let Some((idx, Token::Dash)) = self.seq.peek_enumerated() {
+                    Err(SyntaxError::RangeIsForbiddenForPosixClasses(idx))?
+                }
+                continue;
+            }
 
             let start_token = self.seq.next().unwrap();
 
-            if let Some(Token::Literal('-')) = self.seq.peek() {
+            if let Some(Token::Dash) = self.seq.peek() {
                 self.seq.next();
 
-                // the '-' was escaped means it is not range
-                if self.seq.previous_token_was_backslash() {
-                    expr.insert(char::from(&start_token));
-                    expr.insert('-');
-                    continue;
+                if let (Some(Token::LSquareBracket), Some(Token::Colon)) = self.seq.peek_two() {
+                    Err(SyntaxError::RangeIsForbiddenForPosixClasses(
+                        self.seq.cur_pos(),
+                    ))?
                 }
 
                 if let Some(end_token) = self.seq.peek().cloned() {
@@ -262,8 +292,69 @@ where
     S: Serializer,
     T: Ord + Serialize,
 {
-    let ordered: BTreeSet<_> = value.iter().collect();
+    let ordered: std::collections::BTreeSet<_> = value.iter().collect();
     ordered.serialize(serializer)
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+#[cfg_attr(test, derive(Serialize))]
+pub(crate) enum PosixClass {
+    Alnum,
+    Alpha,
+    Blank,
+    Cntrl,
+    Digit,
+    Graph,
+    Lower,
+    Print,
+    Punct,
+    Space,
+    Upper,
+    Xdigit,
+}
+
+impl TryFrom<&str> for PosixClass {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "alnum" => Ok(PosixClass::Alnum),
+            "alpha" => Ok(PosixClass::Alpha),
+            "blank" => Ok(PosixClass::Blank),
+            "cntrl" => Ok(PosixClass::Cntrl),
+            "digit" => Ok(PosixClass::Digit),
+            "graph" => Ok(PosixClass::Graph),
+            "lower" => Ok(PosixClass::Lower),
+            "print" => Ok(PosixClass::Print),
+            "punct" => Ok(PosixClass::Punct),
+            "space" => Ok(PosixClass::Space),
+            "upper" => Ok(PosixClass::Upper),
+            "xdigit" => Ok(PosixClass::Xdigit),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<&PosixClass> for HashSet<char> {
+    fn from(value: &PosixClass) -> Self {
+        match value {
+            PosixClass::Alnum => ('a'..='z').chain('A'..='Z').chain('0'..='9').collect(),
+            PosixClass::Alpha => ('a'..='z').chain('A'..='Z').collect(),
+            PosixClass::Blank => HashSet::from([' ', '\t']),
+            PosixClass::Cntrl => (0u8..=31)
+                .map(|c| c as char)
+                .chain(std::iter::once(127 as char))
+                .collect(),
+            PosixClass::Digit => ('0'..='9').collect(),
+            PosixClass::Graph => ('!'..='~').collect(),
+            PosixClass::Lower => ('a'..='z').collect(),
+            PosixClass::Print => (' '..='~').collect(),
+            PosixClass::Punct => "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~".chars().collect(),
+            PosixClass::Space => HashSet::from([' ', '\t', '\n', '\r', '\x0B', '\x0C']),
+            PosixClass::Upper => ('A'..='Z').collect(),
+            PosixClass::Xdigit => ('0'..='9').chain('a'..='f').chain('A'..='F').collect(),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -376,6 +467,10 @@ pub(crate) enum SyntaxError {
     RangeQuantifierInvalidNumber(String),
     RangeQuantifierMinGreaterMax(u16, u16),
     InvalidRangeInCharacterSet(char, char),
+    RangeIsForbiddenForPosixClasses(usize),
+    UnknownPosixClassName(usize, String),
+
+    ExpectedEndOfPosixClassSyntax(usize, Option<char>),
     InternalError, // TODO: delete, now I put it as stub when not sure
 }
 
@@ -425,6 +520,48 @@ mod tests {
             let ast_result = RegexAstNode::try_from(tokens);
             // then
             INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
+        }
+
+        #[test]
+        fn concatenation_of_all_atom_types() {
+            // given
+            let tokens = vec![
+                Literal('a'),
+                Dot,
+                LParen,
+                Literal('b'),
+                RParen,
+                LSquareBracket,
+                Literal('c'),
+                RSquareBracket,
+                Dash,
+                Colon,
+            ]; // a.(b)[c]-:
+            let pattern_string = to_pattern_string(&tokens);
+
+            // when
+            let ast_result = RegexAstNode::try_from(tokens);
+
+            // then
+            INSTA_SETTINGS.bind(|| insta::assert_yaml_snapshot!((pattern_string, ast_result)));
+        }
+
+        #[rstest]
+        #[case("colon_as_literal_concat", vec![Literal('a'), Colon, Literal('b')])] // a:b
+        #[case("dash_as_literal_concat", vec![Literal('a'), Dash, Literal('b')])] // a-b
+        #[case("mixed_literals", vec![Literal('a'), Dash, Literal('b'), Colon, Literal('c')])] // a-b:c
+        #[case("colon_with_quantifier", vec![Literal('a'), Colon, Literal('b'), Star])] // a:b*
+        #[case("dash_with_alternation", vec![Literal('a'), Dash, Literal('b'), Pipe, Literal('c')])] // a-b|c
+        #[case("colon_and_dash_in_group", vec![LParen, Literal('x'), Dash, Literal('y'), Colon, Literal('z'), RParen])] // (x-y:z)
+        #[case("escaped_colon_and_dash", vec![Literal('a'), BackSlash, Literal(':'), Dash, BackSlash, Literal('-')])] // a\:- \-
+        fn colon_and_dash_are_literals_outside_character_sets(
+            #[case] name: &str,
+            #[case] tokens: Vec<Token>,
+        ) {
+            let pattern_string = to_pattern_string(&tokens);
+            let ast_result = RegexAstNode::try_from(tokens);
+            INSTA_SETTINGS
+                .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
         }
     }
 
@@ -687,7 +824,8 @@ mod tests {
 
             #[rstest]
             #[case("valid_bounded_exact", vec![Literal('a'), LCurlyBracket, Literal('3'), RCurlyBracket])] // a{3}
-            #[case("valid_bounded_at_least", vec![Literal('a'), LCurlyBracket, Literal('5'), Literal(','), RCurlyBracket])] // a{5,}
+            #[case("valid_bounded_at_least", vec![Literal('a'), LCurlyBracket, Literal('5'),
+            Literal(','), RCurlyBracket])] // a{5,}
             #[case("valid_bounded_range", vec![Literal('a'), LCurlyBracket, Literal('2'), Literal(','), Literal('4'), RCurlyBracket])] // a{2,4}
             #[case("valid_bounded_with_spaces", vec![Literal('a'), LCurlyBracket, Literal(' '), Literal('2'), Literal(' '), Literal(','), Literal(' '), Literal('4'), Literal(' '), RCurlyBracket])] // a{ 2 , 4 }
             fn valid_cases(#[case] name: &str, #[case] tokens: Vec<Token>) {
@@ -808,24 +946,24 @@ mod tests {
             #[rstest]
             // --- Basic Sets and Ranges ---
             #[case("set_simple_literals", vec![LSquareBracket, Literal('a'), Literal('b'), Literal('c'), RSquareBracket])] // [abc]
-            #[case("set_numeric_range", vec![LSquareBracket, Literal('0'), Literal('-'), Literal('9'), RSquareBracket])] // [0-9]
-            #[case("set_lowercase_range", vec![LSquareBracket, Literal('a'), Literal('-'), Literal('z'), RSquareBracket])] // [a-z]
-            #[case("set_uppercase_range", vec![LSquareBracket, Literal('A'), Literal('-'), Literal('Z'), RSquareBracket])] // [A-Z]
-            #[case("set_mixed_ranges_and_literals", vec![LSquareBracket, Literal('A'), Literal('-'), Literal('F'), Literal('x'), Literal('0'), Literal('-'), Literal('9'), RSquareBracket])] // [A-Fx0-9]
-            #[case("set_single_char_range", vec![LSquareBracket, Literal('c'), Literal('-'), Literal('c'), RSquareBracket])] // [c-c]
-            #[case("valid_range_upper_to_lower", vec![LSquareBracket, Literal('Z'), Literal('-'), Literal('a'), RSquareBracket])] // [Z-a]
-            #[case("valid_range_digit_to_alpha", vec![LSquareBracket, Literal('5'), Literal('-'), Literal('A'), RSquareBracket])] // [5-A]
-            #[case("two_brackets_with_alteration", vec![LSquareBracket, Literal('Z'), Literal('-'), Literal('a'), RSquareBracket,
-                Pipe, LSquareBracket, Literal('c'), Literal('-'), Literal('f'), RSquareBracket])] // [Z-a]|[c-f]
+            #[case("set_numeric_range", vec![LSquareBracket, Literal('0'), Dash, Literal('9'), RSquareBracket])] // [0-9]
+            #[case("set_lowercase_range", vec![LSquareBracket, Literal('a'), Dash, Literal('z'), RSquareBracket])] // [a-z]
+            #[case("set_uppercase_range", vec![LSquareBracket, Literal('A'), Dash, Literal('Z'), RSquareBracket])] // [A-Z]
+            #[case("set_mixed_ranges_and_literals", vec![LSquareBracket, Literal('A'), Dash, Literal('F'), Literal('x'), Literal('0'), Dash, Literal('9'), RSquareBracket])] // [A-Fx0-9]
+            #[case("set_single_char_range", vec![LSquareBracket, Literal('c'), Dash, Literal('c'), RSquareBracket])] // [c-c]
+            #[case("valid_range_upper_to_lower", vec![LSquareBracket, Literal('Z'), Dash, Literal('a'), RSquareBracket])] // [Z-a]
+            #[case("valid_range_digit_to_alpha", vec![LSquareBracket, Literal('5'), Dash, Literal('A'), RSquareBracket])] // [5-A]
+            #[case("two_brackets_with_alteration", vec![LSquareBracket, Literal('Z'), Dash, Literal('a'), RSquareBracket,
+                Pipe, LSquareBracket, Literal('c'), Dash, Literal('f'), RSquareBracket])] // [Z-a]|[c-f]
 
             // --- Negated Sets ---
             #[case("negated_set_simple_literals", vec![LSquareBracket, Caret, Literal('a'), Literal('b'), Literal('c'), RSquareBracket])] // [^abc]
-            #[case("negated_set_range", vec![LSquareBracket,Caret, Literal('a'), Literal('-'), Literal('z'), RSquareBracket])] // [^a-z]
+            #[case("negated_set_range", vec![LSquareBracket,Caret, Literal('a'), Dash, Literal('z'), RSquareBracket])] // [^a-z]
 
             // --- Special Character Handling (as Literals) ---
-            #[case("literal_hyphen_at_start", vec![LSquareBracket, Literal('-'), Literal('a'), Literal('b'), RSquareBracket])] // [-ab]
-            #[case("literal_hyphen_at_end", vec![LSquareBracket, Literal('a'), Literal('b'), Literal('-'), RSquareBracket])] // [ab-]
-            #[case("literal_hyphen_after_negation", vec![LSquareBracket, Caret, Literal('-'), Literal('a'), Literal('b'), RSquareBracket])] // [^-ab]
+            #[case("literal_hyphen_at_start", vec![LSquareBracket, Dash, Literal('a'), Literal('b'), RSquareBracket])] // [-ab]
+            #[case("literal_hyphen_at_end", vec![LSquareBracket, Literal('a'), Literal('b'), Dash, RSquareBracket])] // [ab-]
+            #[case("literal_hyphen_after_negation", vec![LSquareBracket, Caret, Dash, Literal('a'), Literal('b'), RSquareBracket])] // [^-ab]
             #[case("literal_caret_not_at_start", vec![LSquareBracket, Literal('a'), Literal('^'), Literal('b'), RSquareBracket])] // [a^b]
             #[case("literal_closing_bracket_at_start", vec![LSquareBracket, RSquareBracket, Literal('a'), RSquareBracket])] // []a]
             #[case("literal_closing_bracket_after_negation", vec![LSquareBracket, Caret, RSquareBracket, Literal('a'), RSquareBracket])] // [^]a]
@@ -843,12 +981,9 @@ mod tests {
             // --- Quantifiable Sets ---
             #[case("set_with_quantifier", vec![LSquareBracket, Literal('a'), Literal('b'), RSquareBracket, Plus])] // [ab]+
             #[case("negated_set_with_quantifier", vec![LSquareBracket, Caret, Literal('a'), RSquareBracket, Star])] // [^a]*
-            #[case("range_with_bounded_quantifier", vec![LSquareBracket, Literal('0'), Literal('-'), Literal('9'), RSquareBracket, LCurlyBracket, Literal('2'), Literal(','), Literal('4'), RCurlyBracket])] // [0-9]{2,4}
-            #[case("range_in_parent_with_alter_and_start", vec![LParen, LSquareBracket, Literal('Z'), Literal('-'), Literal('a'), RSquareBracket, Pipe, Literal('2'), RParen, Star])] // ([Z-a]|2)*
+            #[case("range_with_bounded_quantifier", vec![LSquareBracket, Literal('0'), Dash, Literal('9'), RSquareBracket, LCurlyBracket, Literal('2'), Literal(','), Literal('4'), RCurlyBracket])] // [0-9]{2,4}
+            #[case("range_in_parent_with_alter_and_start", vec![LParen, LSquareBracket, Literal('Z'), Dash, Literal('a'), RSquareBracket, Pipe, Literal('2'), RParen, Star])] // ([Z-a]|2)*
             fn test_valid_sets(#[case] name: &str, #[case] tokens: Vec<Token>) {
-                if name == "escaped_hyphen_in_middle" {
-                    println!()
-                }
                 let pattern_string = to_pattern_string(&tokens);
                 let ast_result = RegexAstNode::try_from(tokens);
 
@@ -865,11 +1000,11 @@ mod tests {
             #[case("empty_set", vec![LSquareBracket, RSquareBracket])] // []
             #[case("empty_negated_set", vec![LSquareBracket, Caret, RSquareBracket])] // [^]
             #[case("unclosed_negated_set", vec![LSquareBracket, Literal('^'), Literal('a')])] // [^a
-            #[case("unclosed_set_with_range", vec![LSquareBracket, Literal('a'), Literal('-')])] // [a-
+            #[case("unclosed_set_with_range", vec![LSquareBracket, Literal('a'), Dash])] // [a-
             #[case("unclosed_set_dangling_escape", vec![LSquareBracket, Literal('a'), BackSlash, Literal('\\')])] // [a\
-            #[case("unclosed_bracket_in_parent", vec![LParen, LSquareBracket, Literal('Z'), Literal('-'), Literal('a')])] // ([Z-a
-            #[case("unclosed_bracket_in_parent_2", vec![LParen, LSquareBracket, Literal('Z'), Literal('-'), Literal('a'), RSquareBracket,
-                Pipe, LSquareBracket, Literal('Z'), Literal('-'), Literal('a')])] // ([Z-a]|[Z-a
+            #[case("unclosed_bracket_in_parent", vec![LParen, LSquareBracket, Literal('Z'), Dash, Literal('a')])] // ([Z-a
+            #[case("unclosed_bracket_in_parent_2", vec![LParen, LSquareBracket, Literal('Z'), Dash, Literal('a'), RSquareBracket,
+                Pipe, LSquareBracket, Literal('Z'), Dash, Literal('a')])] // ([Z-a]|[Z-a
             fn unclosed_sets_fail(#[case] name: &str, #[case] tokens: Vec<Token>) {
                 let pattern_string = to_pattern_string(&tokens);
                 let ast_result = RegexAstNode::try_from(tokens);
@@ -878,11 +1013,91 @@ mod tests {
             }
 
             #[rstest]
-            #[case("invalid_range_desc_alpha", vec![LSquareBracket, Literal('z'), Literal('-'), Literal('a'), RSquareBracket])] // [z-a]
-            #[case("invalid_range_lower_to_upper", vec![LSquareBracket, Literal('f'), Literal('-'), Literal('A'), RSquareBracket])] // [f-A]
-            #[case("invalid_range_alpha_to_digit", vec![LSquareBracket, Literal('z'), Literal('-'), Literal('0'), RSquareBracket])] // [z-0]
-            #[case("invalid_range_desc_numeric", vec![LSquareBracket, Literal('9'), Literal('-'), Literal('0'), RSquareBracket])] // [9-0]
+            #[case("invalid_range_desc_alpha", vec![LSquareBracket, Literal('z'), Dash, Literal('a'), RSquareBracket])] // [z-a]
+            #[case("invalid_range_lower_to_upper", vec![LSquareBracket, Literal('f'), Dash, Literal('A'), RSquareBracket])] // [f-A]
+            #[case("invalid_range_alpha_to_digit", vec![LSquareBracket, Literal('z'), Dash, Literal('0'), RSquareBracket])] // [z-0]
+            #[case("invalid_range_desc_numeric", vec![LSquareBracket, Literal('9'), Dash, Literal('0'), RSquareBracket])] // [9-0]
             fn invalid_ranges_fail(#[case] name: &str, #[case] tokens: Vec<Token>) {
+                let pattern_string = to_pattern_string(&tokens);
+                let ast_result = RegexAstNode::try_from(tokens);
+                INSTA_SETTINGS
+                    .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+            }
+        }
+    }
+
+    mod posix_character_classes {
+        use super::*;
+
+        mod valid_syntax {
+            use super::*;
+
+            #[rstest]
+            #[case("posix_alnum", vec![LSquareBracket, LSquareBracket, Colon, Literal('a'), Literal('l'), Literal('n'), Literal('u'), Literal('m'),Colon, RSquareBracket, RSquareBracket])] // [[:alnum:]]
+            #[case("posix_alpha", vec![LSquareBracket, LSquareBracket, Colon, Literal('a'), Literal('l'), Literal('p'), Literal('h'), Literal('a'), Colon, RSquareBracket, RSquareBracket])] // [[:alpha:]]
+            #[case("posix_blank", vec![LSquareBracket, LSquareBracket, Colon, Literal('b'), Literal('l'), Literal('a'), Literal('n'), Literal('k'), Colon, RSquareBracket, RSquareBracket])] // [[:blank:]]
+            #[case("posix_cntrl", vec![LSquareBracket, LSquareBracket, Colon, Literal('c'), Literal('n'), Literal('t'), Literal('r'), Literal('l'), Colon, RSquareBracket, RSquareBracket])] // [[:cntrl:]]
+            #[case("posix_digit", vec![LSquareBracket, LSquareBracket, Colon, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), Colon, RSquareBracket, RSquareBracket])] // [[:digit:]]
+            #[case("posix_graph", vec![LSquareBracket, LSquareBracket, Colon, Literal('g'), Literal('r'), Literal('a'), Literal('p'), Literal('h'), Colon, RSquareBracket, RSquareBracket])] // [[:graph:]]
+            #[case("posix_lower", vec![LSquareBracket, LSquareBracket, Colon, Literal('l'), Literal('o'), Literal('w'), Literal('e'), Literal('r'), Colon, RSquareBracket, RSquareBracket])] // [[:lower:]]
+            #[case("posix_print", vec![LSquareBracket, LSquareBracket, Colon, Literal('p'), Literal('r'), Literal('i'), Literal('n'), Literal('t'), Colon, RSquareBracket, RSquareBracket])] // [[:print:]]
+            #[case("posix_punct", vec![LSquareBracket, LSquareBracket, Colon, Literal('p'), Literal('u'), Literal('n'), Literal('c'), Literal('t'), Colon, RSquareBracket, RSquareBracket])] // [[:punct:]]
+            #[case("posix_space", vec![LSquareBracket, LSquareBracket, Colon, Literal('s'), Literal('p'), Literal('a'), Literal('c'), Literal('e'), Colon, RSquareBracket, RSquareBracket])] // [[:space:]]
+            #[case("posix_upper", vec![LSquareBracket, LSquareBracket, Colon, Literal('u'), Literal('p'), Literal('p'), Literal('e'), Literal('r'), Colon, RSquareBracket, RSquareBracket])] // [[:upper:]]
+            #[case("posix_xdigit", vec![LSquareBracket, LSquareBracket, Colon, Literal('x'), Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), Colon, RSquareBracket, RSquareBracket])] // [[:xdigit:]]
+            fn test_standalone_posix_classes(#[case] name: &str, #[case] tokens: Vec<Token>) {
+                let pattern_string = to_pattern_string(&tokens);
+                let ast_result = RegexAstNode::try_from(tokens);
+                INSTA_SETTINGS
+                    .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+            }
+
+            #[rstest]
+            #[case("posix_with_literals", vec![LSquareBracket, Literal('a'), Literal('b'), LSquareBracket, Colon, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), Colon, RSquareBracket, RSquareBracket])] // [ab[:digit:]]
+            #[case("posix_with_range", vec![LSquareBracket, Literal('a'), Dash, Literal('f'), LSquareBracket, Colon, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), Colon, RSquareBracket, RSquareBracket])] // [a-f[:digit:]]
+            #[case("multiple_posix_classes", vec![LSquareBracket, LSquareBracket, Colon, Literal('a'), Literal('l'), Literal('p'), Literal('h'), Literal('a'), Colon, RSquareBracket, LSquareBracket, Colon, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), Colon, RSquareBracket, RSquareBracket])] // [[:alpha:][:digit:]]
+            #[case("negated_posix_class", vec![LSquareBracket, Caret, LSquareBracket, Colon, Literal('s'), Literal('p'), Literal('a'), Literal('c'), Literal('e'), Colon, RSquareBracket, RSquareBracket])] // [^[:space:]]
+            #[case("negated_posix_with_literals", vec![LSquareBracket, Caret, Literal('a'), LSquareBracket, Colon, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), Colon, RSquareBracket, RSquareBracket])] // [^a[:digit:]]
+            fn test_combined_posix_classes(#[case] name: &str, #[case] tokens: Vec<Token>) {
+                let pattern_string = to_pattern_string(&tokens);
+                let ast_result = RegexAstNode::try_from(tokens);
+                INSTA_SETTINGS
+                    .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+            }
+
+            #[rstest]
+            #[case("quantified_posix", vec![LSquareBracket, LSquareBracket, Colon, Literal('a'), Literal('l'), Literal('p'), Literal('h'), Literal('a'), Colon, RSquareBracket, RSquareBracket, Plus])] // [[:alpha:]]+
+            #[case("quantified_posix_with_literals", vec![LSquareBracket, Literal('X'), LSquareBracket, Colon, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), Colon, RSquareBracket, RSquareBracket, Star])] // [X[:digit:]]*
+            fn test_quantified_posix_sets(#[case] name: &str, #[case] tokens: Vec<Token>) {
+                let pattern_string = to_pattern_string(&tokens);
+                let ast_result = RegexAstNode::try_from(tokens);
+                INSTA_SETTINGS
+                    .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+            }
+        }
+
+        mod invalid_syntax {
+            use super::*;
+
+            #[rstest]
+            #[case("misspelled_class_name", vec![LSquareBracket, LSquareBracket, Colon, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('s'), Colon, RSquareBracket, RSquareBracket])] // [[:digis:]]
+            #[case("not_a_class_name", vec![LSquareBracket, LSquareBracket, Colon, Literal('f',), Literal('o'), Literal('o'), Colon, RSquareBracket, RSquareBracket])] // [[:foo:]]
+            #[case("missing_closing_colon", vec![LSquareBracket, LSquareBracket, Colon, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), RSquareBracket, RSquareBracket])] // [[:digit]]
+            #[case("missing_opening_colon", vec![LSquareBracket, LSquareBracket, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), Colon, RSquareBracket, RSquareBracket])] // [[digit:]]
+            #[case("missing_both_colons", vec![LSquareBracket, LSquareBracket, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), RSquareBracket, RSquareBracket])] // [[digit]]
+            #[case("empty_class_name", vec![LSquareBracket, LSquareBracket, Colon, Colon, RSquareBracket, RSquareBracket])] // [[:]]
+            #[case("unclosed_posix_in_set", vec![LSquareBracket, Literal('a'), LSquareBracket, Colon, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), Colon, RSquareBracket])] // [a[:digit:]
+            fn malformed_posix_classes_fail(#[case] name: &str, #[case] tokens: Vec<Token>) {
+                let pattern_string = to_pattern_string(&tokens);
+                let ast_result = RegexAstNode::try_from(tokens);
+                INSTA_SETTINGS
+                    .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+            }
+
+            #[rstest]
+            #[case("range_from_char_to_posix", vec![LSquareBracket, Literal('a'), Dash, LSquareBracket, Colon, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), Colon, RSquareBracket, RSquareBracket])] // [a-[:digit:]]
+            #[case("range_from_posix_to_char", vec![LSquareBracket, LSquareBracket, Colon, Literal('d'), Literal('i'), Literal('g'), Literal('i'), Literal('t'), Colon, RSquareBracket, Dash, Literal('z'), RSquareBracket])] // [[:digit:]-z]
+            fn posix_class_in_a_range_fails(#[case] name: &str, #[case] tokens: Vec<Token>) {
                 let pattern_string = to_pattern_string(&tokens);
                 let ast_result = RegexAstNode::try_from(tokens);
                 INSTA_SETTINGS

@@ -2,14 +2,16 @@
 source: regex/src/ast.rs
 expression: "(pattern_string, ast_result)"
 ---
-- "a-b:c"
+- "a-b:c^"
 - Ok:
     Concat:
       - Concat:
           - Concat:
               - Concat:
-                  - Literal: a
-                  - Literal: "-"
-              - Literal: b
-          - Literal: ":"
-      - Literal: c
+                  - Concat:
+                      - Literal: a
+                      - Literal: "-"
+                  - Literal: b
+              - Literal: ":"
+          - Literal: c
+      - Literal: ^

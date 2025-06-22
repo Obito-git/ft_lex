@@ -125,6 +125,7 @@ impl AstParser {
             Token::Colon => Ok(RegexAstNode::Literal(':')),
             Token::Dash => Ok(RegexAstNode::Literal('-')),
             Token::Dot => Ok(RegexAstNode::Wildcard),
+            Token::Caret => Ok(RegexAstNode::Literal('^')),
             Token::LSquareBracket => self.parse_square_bracket_expr(),
             Token::RSquareBracket => Ok(RegexAstNode::Literal(']')),
             Token::LParen => {
@@ -549,12 +550,13 @@ mod tests {
         #[rstest]
         #[case("colon_as_literal_concat", vec![Literal('a'), Colon, Literal('b')])] // a:b
         #[case("dash_as_literal_concat", vec![Literal('a'), Dash, Literal('b')])] // a-b
-        #[case("mixed_literals", vec![Literal('a'), Dash, Literal('b'), Colon, Literal('c')])] // a-b:c
+        #[case("caret_as_literal_concat", vec![Literal('a'), Caret, Literal('b')])] // a^b
+        #[case("mixed_literals", vec![Literal('a'), Dash, Literal('b'), Colon, Literal('c'), Caret])] // a-b:c^
         #[case("colon_with_quantifier", vec![Literal('a'), Colon, Literal('b'), Star])] // a:b*
         #[case("dash_with_alternation", vec![Literal('a'), Dash, Literal('b'), Pipe, Literal('c')])] // a-b|c
         #[case("colon_and_dash_in_group", vec![LParen, Literal('x'), Dash, Literal('y'), Colon, Literal('z'), RParen])] // (x-y:z)
-        #[case("escaped_colon_and_dash", vec![Literal('a'), BackSlash, Literal(':'), Dash, BackSlash, Literal('-')])] // a\:- \-
-        fn colon_and_dash_are_literals_outside_character_sets(
+        #[case("escaped_colon_dash_and_caret", vec![BackSlash, Caret, BackSlash, Colon, Literal('a'), BackSlash, Literal(':'), Dash, BackSlash, Literal('-')])] // \^a\:- \-
+        fn bracket_special_chars_are_literals_outside_character_sets(
             #[case] name: &str,
             #[case] tokens: Vec<Token>,
         ) {

@@ -244,7 +244,7 @@ impl Nfa {
         reachable
     }
 
-    pub(crate) fn accepts(&self, s: &str) -> bool {
+    pub(crate) fn is_exact_match(&self, s: &str) -> bool {
         let mut current_states = Self::follow_epsilons(self, &[self.start_state]);
         for c in s.chars() {
             let next_states_after_char: Vec<usize> = current_states
@@ -288,13 +288,13 @@ mod tests {
                 let nfa = Nfa::from_char(pattern_char);
 
                 // should match the same char
-                assert!(nfa.accepts(&pattern_char.to_string()));
+                assert!(nfa.is_exact_match(&pattern_char.to_string()));
 
                 // shouldn't match any other one
                 for x in 32..=126 {
                     let not_pattern_char = x as u8 as char;
                     if i != x {
-                        assert!(!nfa.accepts(&not_pattern_char.to_string()));
+                        assert!(!nfa.is_exact_match(&not_pattern_char.to_string()));
                     }
                 }
             }
@@ -317,7 +317,7 @@ mod tests {
             let nfa = Nfa::from_char(nfa_char);
 
             //when
-            let matched = nfa.accepts(s);
+            let matched = nfa.is_exact_match(s);
 
             //then
             assert!(!matched);
@@ -346,7 +346,7 @@ mod tests {
 
             //when
             nfa1.concatenate(&nfa2);
-            let matched = nfa1.accepts(expected_str);
+            let matched = nfa1.is_exact_match(expected_str);
 
             //then
             assert!(matched);
@@ -375,7 +375,7 @@ mod tests {
 
             //when
             nfa1.concatenate(&nfa2);
-            let matched = nfa1.accepts(expected_str);
+            let matched = nfa1.is_exact_match(expected_str);
 
             //then
             assert!(!matched);
@@ -404,7 +404,7 @@ mod tests {
 
             //when
             nfa1.alternate(&nfa2);
-            let matched = nfa1.accepts(input_str);
+            let matched = nfa1.is_exact_match(input_str);
 
             //then
             assert!(matched);
@@ -431,7 +431,7 @@ mod tests {
 
             //when
             nfa1.alternate(&nfa2);
-            let matched = nfa1.accepts(input_str);
+            let matched = nfa1.is_exact_match(input_str);
 
             //then
             assert!(!matched);
@@ -454,7 +454,7 @@ mod tests {
 
             //when
             base_nfa.kleene_star();
-            let matched = base_nfa.accepts(input_str);
+            let matched = base_nfa.is_exact_match(input_str);
 
             //then
             assert!(matched);
@@ -474,7 +474,7 @@ mod tests {
 
             //when
             base_nfa.kleene_star();
-            let matched = base_nfa.accepts(input_str);
+            let matched = base_nfa.is_exact_match(input_str);
 
             //then
             assert!(!matched);
@@ -509,7 +509,7 @@ mod tests {
             nfa1.kleene_star();
 
             // when
-            let matched = nfa1.accepts(input);
+            let matched = nfa1.is_exact_match(input);
 
             // then
             assert!(matched);
@@ -536,7 +536,7 @@ mod tests {
 
             // when
             nfa1.kleene_star();
-            let matched = nfa1.accepts(input);
+            let matched = nfa1.is_exact_match(input);
 
             // then
             assert!(!matched);
@@ -553,13 +553,13 @@ mod tests {
 
             // when && then
             // should not match the new line
-            assert!(!nfa.accepts("\n"));
+            assert!(!nfa.is_exact_match("\n"));
 
             // should match any other single printable ASCII character
             for code_point in 32..=126 {
                 let c = code_point as u8 as char;
                 if c != '\n' {
-                    assert!(nfa.accepts(&c.to_string()));
+                    assert!(nfa.is_exact_match(&c.to_string()));
                 }
             }
         }
@@ -639,7 +639,7 @@ mod tests {
             };
 
             // when
-            let matched = nfa.accepts(input_str);
+            let matched = nfa.is_exact_match(input_str);
 
             // then
             assert!(matched);
@@ -676,7 +676,7 @@ mod tests {
             };
 
             // when
-            let matched = nfa.accepts(input_str);
+            let matched = nfa.is_exact_match(input_str);
 
             // then
             assert!(!matched);
@@ -700,7 +700,7 @@ mod tests {
 
             // when
             base_nfa.zero_or_one();
-            let matched = base_nfa.accepts(input_str);
+            let matched = base_nfa.is_exact_match(input_str);
 
             // then
             assert!(matched);
@@ -722,7 +722,7 @@ mod tests {
 
             // when
             base_nfa.zero_or_one();
-            let matched = base_nfa.accepts(input_str);
+            let matched = base_nfa.is_exact_match(input_str);
 
             // then
             assert!(!matched);
@@ -751,7 +751,7 @@ mod tests {
 
             // when
             nfa1.zero_or_one();
-            let matched = nfa1.accepts(input_str);
+            let matched = nfa1.is_exact_match(input_str);
 
             // then
             assert!(matched);
@@ -777,7 +777,7 @@ mod tests {
 
             // when
             nfa1.zero_or_one();
-            let matched = nfa1.accepts(input_str);
+            let matched = nfa1.is_exact_match(input_str);
 
             // then
             assert!(!matched);
@@ -799,7 +799,7 @@ mod tests {
 
             // when
             base_nfa.one_or_more();
-            let matched = base_nfa.accepts(input_str);
+            let matched = base_nfa.is_exact_match(input_str);
 
             // then
             assert!(matched);
@@ -820,7 +820,7 @@ mod tests {
 
             // when
             base_nfa.one_or_more();
-            let matched = base_nfa.accepts(input_str);
+            let matched = base_nfa.is_exact_match(input_str);
 
             // then
             assert!(!matched);
@@ -852,7 +852,7 @@ mod tests {
 
             // when
             nfa1.one_or_more();
-            let matched = nfa1.accepts(input_str);
+            let matched = nfa1.is_exact_match(input_str);
 
             // then
             assert!(matched);
@@ -879,7 +879,7 @@ mod tests {
 
             // when
             nfa1.one_or_more();
-            let matched = nfa1.accepts(input_str);
+            let matched = nfa1.is_exact_match(input_str);
 
             // then
             assert!(!matched);
@@ -896,11 +896,11 @@ mod tests {
             let nfa = Nfa::from_epsilon();
 
             // then should match empty
-            assert!(nfa.accepts(""));
+            assert!(nfa.is_exact_match(""));
 
             // then shouldn't match non empty
-            assert!(!nfa.accepts("a"));
-            assert!(!nfa.accepts(" "));
+            assert!(!nfa.is_exact_match("a"));
+            assert!(!nfa.is_exact_match(" "));
         }
 
         #[test]
@@ -916,14 +916,14 @@ mod tests {
             nfa_q_mark.zero_or_one(); // ()?
 
             // then: All of them should still only match the empty string
-            assert!(nfa_star.accepts(""));
-            assert!(!nfa_star.accepts("a"));
+            assert!(nfa_star.is_exact_match(""));
+            assert!(!nfa_star.is_exact_match("a"));
 
-            assert!(nfa_plus.accepts(""));
-            assert!(!nfa_plus.accepts("a"));
+            assert!(nfa_plus.is_exact_match(""));
+            assert!(!nfa_plus.is_exact_match("a"));
 
-            assert!(nfa_q_mark.accepts(""));
-            assert!(!nfa_q_mark.accepts("a"));
+            assert!(nfa_q_mark.is_exact_match(""));
+            assert!(!nfa_q_mark.is_exact_match("a"));
         }
 
         #[rstest]
@@ -940,10 +940,10 @@ mod tests {
             nfa.concatenate(&Nfa::from_char(c2));
 
             // then
-            assert!(nfa.accepts(input));
-            assert!(!nfa.accepts(""));
-            assert!(!nfa.accepts(&c1.to_string()));
-            assert!(!nfa.accepts(&c2.to_string()));
+            assert!(nfa.is_exact_match(input));
+            assert!(!nfa.is_exact_match(""));
+            assert!(!nfa.is_exact_match(&c1.to_string()));
+            assert!(!nfa.is_exact_match(&c2.to_string()));
         }
 
         #[rstest]
@@ -957,7 +957,7 @@ mod tests {
             nfa.alternate(&Nfa::from_epsilon());
 
             // then
-            assert!(nfa.accepts(input));
+            assert!(nfa.is_exact_match(input));
         }
 
         #[rstest]
@@ -969,7 +969,7 @@ mod tests {
             nfa.alternate(&Nfa::from_epsilon());
 
             // then
-            assert!(!nfa.accepts(input));
+            assert!(!nfa.is_exact_match(input));
         }
     }
 
@@ -995,7 +995,7 @@ mod tests {
                 #[case] input: &str,
             ) {
                 let nfa = nfa_from_range(c, n, Some(n));
-                assert!(nfa.accepts(input));
+                assert!(nfa.is_exact_match(input));
             }
 
             #[rstest]
@@ -1009,15 +1009,15 @@ mod tests {
                 #[case] input: &str,
             ) {
                 let nfa = nfa_from_range(c, n, Some(n));
-                assert!(!nfa.accepts(input));
+                assert!(!nfa.is_exact_match(input));
             }
 
             #[test]
             fn should_match_zero_repetitions_as_empty_string() {
                 // `a{0}` case
                 let nfa = nfa_from_range('a', 0, Some(0));
-                assert!(nfa.accepts(""));
-                assert!(!nfa.accepts("a"));
+                assert!(nfa.is_exact_match(""));
+                assert!(!nfa.is_exact_match("a"));
             }
         }
 
@@ -1039,7 +1039,7 @@ mod tests {
                 #[case] input: &str,
             ) {
                 let nfa = nfa_from_range(c, n, None);
-                assert!(nfa.accepts(input));
+                assert!(nfa.is_exact_match(input));
             }
 
             #[rstest]
@@ -1053,7 +1053,7 @@ mod tests {
                 #[case] input: &str,
             ) {
                 let nfa = nfa_from_range(c, n, None);
-                assert!(!nfa.accepts(input));
+                assert!(!nfa.is_exact_match(input));
             }
         }
 
@@ -1075,7 +1075,7 @@ mod tests {
                 #[case] input: &str,
             ) {
                 let nfa = nfa_from_range(c, n, Some(m));
-                assert!(nfa.accepts(input));
+                assert!(nfa.is_exact_match(input));
             }
 
             #[rstest]
@@ -1090,7 +1090,7 @@ mod tests {
                 #[case] input: &str,
             ) {
                 let nfa = nfa_from_range(c, n, Some(m));
-                assert!(!nfa.accepts(input));
+                assert!(!nfa.is_exact_match(input));
             }
         }
     }
@@ -1116,7 +1116,7 @@ mod tests {
                 // given
                 let nfa = Nfa::from_char_set(false, &set);
                 // then
-                assert!(nfa.accepts(input));
+                assert!(nfa.is_exact_match(input));
             }
 
             #[rstest]
@@ -1130,7 +1130,7 @@ mod tests {
                 // given
                 let nfa = Nfa::from_char_set(false, &set);
                 // then
-                assert!(!nfa.accepts(input));
+                assert!(!nfa.is_exact_match(input));
             }
 
             #[rstest]
@@ -1144,7 +1144,7 @@ mod tests {
                 // given
                 let nfa = Nfa::from_char_set(false, &set);
                 // then
-                assert!(!nfa.accepts(input));
+                assert!(!nfa.is_exact_match(input));
             }
         }
 
@@ -1160,10 +1160,10 @@ mod tests {
                 nfa.concatenate(&nfa_c);
 
                 // then
-                assert!(nfa.accepts("ac"));
-                assert!(nfa.accepts("bc"));
-                assert!(!nfa.accepts("c"));
-                assert!(!nfa.accepts("abc"));
+                assert!(nfa.is_exact_match("ac"));
+                assert!(nfa.is_exact_match("bc"));
+                assert!(!nfa.is_exact_match("c"));
+                assert!(!nfa.is_exact_match("abc"));
             }
 
             #[test]
@@ -1175,11 +1175,11 @@ mod tests {
                 nfa.alternate(&nfa_c);
 
                 // then
-                assert!(nfa.accepts("a"));
-                assert!(nfa.accepts("b"));
-                assert!(nfa.accepts("c"));
-                assert!(!nfa.accepts("d"));
-                assert!(!nfa.accepts("ac"));
+                assert!(nfa.is_exact_match("a"));
+                assert!(nfa.is_exact_match("b"));
+                assert!(nfa.is_exact_match("c"));
+                assert!(!nfa.is_exact_match("d"));
+                assert!(!nfa.is_exact_match("ac"));
             }
 
             #[test]
@@ -1190,15 +1190,15 @@ mod tests {
                 nfa.kleene_star();
 
                 // then
-                assert!(nfa.accepts(""));
-                assert!(nfa.accepts("a"));
-                assert!(nfa.accepts("b"));
-                assert!(nfa.accepts("aa"));
-                assert!(nfa.accepts("bb"));
-                assert!(nfa.accepts("ab"));
-                assert!(nfa.accepts("baba"));
-                assert!(!nfa.accepts("c"));
-                assert!(!nfa.accepts("ac"));
+                assert!(nfa.is_exact_match(""));
+                assert!(nfa.is_exact_match("a"));
+                assert!(nfa.is_exact_match("b"));
+                assert!(nfa.is_exact_match("aa"));
+                assert!(nfa.is_exact_match("bb"));
+                assert!(nfa.is_exact_match("ab"));
+                assert!(nfa.is_exact_match("baba"));
+                assert!(!nfa.is_exact_match("c"));
+                assert!(!nfa.is_exact_match("ac"));
             }
 
             #[test]
@@ -1209,11 +1209,11 @@ mod tests {
                 nfa.one_or_more();
 
                 // then
-                assert!(nfa.accepts("a"));
-                assert!(nfa.accepts("b"));
-                assert!(nfa.accepts("ababa"));
-                assert!(!nfa.accepts(""));
-                assert!(!nfa.accepts("c"));
+                assert!(nfa.is_exact_match("a"));
+                assert!(nfa.is_exact_match("b"));
+                assert!(nfa.is_exact_match("ababa"));
+                assert!(!nfa.is_exact_match(""));
+                assert!(!nfa.is_exact_match("c"));
             }
 
             #[test]
@@ -1224,11 +1224,11 @@ mod tests {
                 nfa.zero_or_one();
 
                 // then
-                assert!(nfa.accepts(""));
-                assert!(nfa.accepts("a"));
-                assert!(nfa.accepts("b"));
-                assert!(!nfa.accepts("aa"));
-                assert!(!nfa.accepts("c"));
+                assert!(nfa.is_exact_match(""));
+                assert!(nfa.is_exact_match("a"));
+                assert!(nfa.is_exact_match("b"));
+                assert!(!nfa.is_exact_match("aa"));
+                assert!(!nfa.is_exact_match("c"));
             }
         }
 
@@ -1249,7 +1249,7 @@ mod tests {
                 // given
                 let nfa = Nfa::from_char_set(true, &set);
                 // then
-                assert!(nfa.accepts(input));
+                assert!(nfa.is_exact_match(input));
             }
 
             #[rstest]
@@ -1264,7 +1264,7 @@ mod tests {
                 // given
                 let nfa = Nfa::from_char_set(true, &set);
                 // then
-                assert!(!nfa.accepts(input));
+                assert!(!nfa.is_exact_match(input));
             }
 
             #[rstest]
@@ -1278,7 +1278,7 @@ mod tests {
                 // given
                 let nfa = Nfa::from_char_set(true, &set);
                 // then
-                assert!(!nfa.accepts(input));
+                assert!(!nfa.is_exact_match(input));
             }
 
             #[test]
@@ -1289,12 +1289,12 @@ mod tests {
                 nfa.concatenate(&Nfa::from_char('c'));
 
                 // then
-                assert!(nfa.accepts("bc"));
-                assert!(nfa.accepts("xc"));
-                assert!(nfa.accepts(".c"));
-                assert!(!nfa.accepts("ac"));
-                assert!(!nfa.accepts("c"));
-                assert!(!nfa.accepts("bbc"));
+                assert!(nfa.is_exact_match("bc"));
+                assert!(nfa.is_exact_match("xc"));
+                assert!(nfa.is_exact_match(".c"));
+                assert!(!nfa.is_exact_match("ac"));
+                assert!(!nfa.is_exact_match("c"));
+                assert!(!nfa.is_exact_match("bbc"));
             }
 
             #[test]
@@ -1305,14 +1305,14 @@ mod tests {
                 nfa.kleene_star();
 
                 // then
-                assert!(nfa.accepts(""));
-                assert!(nfa.accepts("c"));
-                assert!(nfa.accepts("xyz"));
-                assert!(nfa.accepts("123_@#$"));
-                assert!(!nfa.accepts("a"));
-                assert!(!nfa.accepts("b"));
-                assert!(!nfa.accepts("ca"));
-                assert!(!nfa.accepts("ab"));
+                assert!(nfa.is_exact_match(""));
+                assert!(nfa.is_exact_match("c"));
+                assert!(nfa.is_exact_match("xyz"));
+                assert!(nfa.is_exact_match("123_@#$"));
+                assert!(!nfa.is_exact_match("a"));
+                assert!(!nfa.is_exact_match("b"));
+                assert!(!nfa.is_exact_match("ca"));
+                assert!(!nfa.is_exact_match("ab"));
             }
         }
     }

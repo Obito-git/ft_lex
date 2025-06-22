@@ -19,6 +19,6 @@ impl Regex {
     }
 
     pub fn matches(&self, s: &str) -> bool {
-        self.nfa.accepts(s)
+        self.nfa.is_exact_match(s)
     }
 }

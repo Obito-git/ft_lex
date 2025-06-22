@@ -51,6 +51,7 @@ impl Token {
                 | Token::Colon
                 | Token::Dash
                 | Token::RSquareBracket
+                | Token::Caret
         )
     }
 }

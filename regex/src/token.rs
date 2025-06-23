@@ -27,6 +27,7 @@ pub(crate) enum Token {
     Caret,
     Colon,
     Dash,
+    Dollar,
 }
 
 impl Token {
@@ -49,6 +50,7 @@ impl Token {
                 | Token::LParen
                 | Token::LSquareBracket
                 | Token::Colon
+                | Token::Dollar
                 | Token::Dash
                 | Token::RSquareBracket
                 | Token::Caret
@@ -158,6 +160,7 @@ impl From<&Token> for char {
             Token::Caret => '^',
             Token::Colon => ':',
             Token::Dash => '-',
+            Token::Dollar => '$',
         }
     }
 }
@@ -205,6 +208,7 @@ impl From<char> for Token {
             '^' => Token::Caret,
             ':' => Token::Colon,
             '-' => Token::Dash,
+            '$' => Token::Dollar,
             _ => Token::Literal(value),
         }
     }
@@ -234,8 +238,9 @@ mod tests {
     #[test]
     fn test_parsing_of_all_special_tokens() {
         // given
-        let pattern = r"a.b*c+d?e|f(g){2}[\.i]-:{}";
+        let pattern = r"^a.b*c+d?e|f(g){2}[\.i]-:{}$";
         let expected = vec![
+            Caret,
             Literal('a'),
             Dot,
             Literal('b'),
@@ -261,6 +266,7 @@ mod tests {
             Colon,
             LCurlyBracket,
             RCurlyBracket,
+            Dollar,
         ];
 
         // when
@@ -273,7 +279,7 @@ mod tests {
     #[test]
     fn test_parsing_with_escaped_special_characters() {
         // given
-        let pattern = r"a\.b\*c\+d\?e\|f\(g\)\:\-\[\]\{\}";
+        let pattern = r"a\.b\*c\+d\?e\|f\(g\)\:\-\[\]\{\}\^\$";
         let expected = vec![
             Literal('a'),
             Literal('.'),
@@ -295,6 +301,8 @@ mod tests {
             Literal(']'),
             Literal('{'),
             Literal('}'),
+            Literal('^'),
+            Literal('$'),
         ];
 
         // when

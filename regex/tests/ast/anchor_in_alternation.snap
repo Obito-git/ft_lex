@@ -1,0 +1,11 @@
+---
+source: regex/src/ast.rs
+expression: "(pattern_string, ast_result)"
+---
+- a|^b
+- Ok:
+    Alter:
+      - Literal: a
+      - Concat:
+          - StartOfLineAnchor
+          - Literal: b

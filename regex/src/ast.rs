@@ -1,7 +1,7 @@
 #[cfg(test)]
 use serde::{Serialize, Serializer};
 
-use crate::nfa::Nfa;
+use crate::nfa::{AnchorType, Nfa};
 use crate::token::Token;
 use crate::TokenSequence;
 use std::collections::HashSet;
@@ -125,7 +125,8 @@ impl AstParser {
             Token::Colon => Ok(RegexAstNode::Literal(':')),
             Token::Dash => Ok(RegexAstNode::Literal('-')),
             Token::Dot => Ok(RegexAstNode::Wildcard),
-            Token::Caret => Ok(RegexAstNode::Literal('^')),
+            Token::Caret => Ok(RegexAstNode::StartOfLineAnchor),
+            Token::Dollar => Ok(RegexAstNode::EndOfLineAnchor),
             Token::LSquareBracket => self.parse_square_bracket_expr(),
             Token::RSquareBracket => Ok(RegexAstNode::Literal(']')),
             Token::LParen => {
@@ -378,6 +379,8 @@ pub(crate) enum RegexAstNode {
     Star(Box<RegexAstNode>),
     Alter(Box<RegexAstNode>, Box<RegexAstNode>),
     Concat(Box<RegexAstNode>, Box<RegexAstNode>),
+    StartOfLineAnchor,
+    EndOfLineAnchor,
     Empty,
 }
 
@@ -419,6 +422,8 @@ impl RegexAstNode {
             RegexAstNode::BracketExpression { is_negated, expr } => {
                 Nfa::from_char_set(*is_negated, expr)
             }
+            RegexAstNode::StartOfLineAnchor => Nfa::from_anchor(AnchorType::StartOfLine),
+            RegexAstNode::EndOfLineAnchor => Nfa::from_anchor(AnchorType::EndOfLine),
         }
     }
 
@@ -560,6 +565,17 @@ mod tests {
             #[case] name: &str,
             #[case] tokens: Vec<Token>,
         ) {
+            let pattern_string = to_pattern_string(&tokens);
+            let ast_result = RegexAstNode::try_from(tokens);
+            INSTA_SETTINGS
+                .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
+        }
+
+        #[rstest]
+        #[case("colon_as_literal_concat", vec![Literal('a'), Colon, Literal('b')])] // a:b
+        #[case("dash_as_literal_concat", vec![Literal('a'), Dash, Literal('b')])] // a-b
+        #[case("escaped_special_chars_as_literals", vec![BackSlash, Caret, Literal('a'), BackSlash, Dollar])] // \^a\$
+        fn special_chars_are_literals(#[case] name: &str, #[case] tokens: Vec<Token>) {
             let pattern_string = to_pattern_string(&tokens);
             let ast_result = RegexAstNode::try_from(tokens);
             INSTA_SETTINGS
@@ -1105,6 +1121,28 @@ mod tests {
                 INSTA_SETTINGS
                     .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
             }
+        }
+    }
+
+    mod anchors {
+        use super::*;
+
+        #[rstest]
+        #[case("anchor_at_start", vec![Caret, Literal('a')])] // ^a
+        #[case("anchor_at_end", vec![Literal('a'), Dollar])] // a$
+        #[case("anchors_at_both_ends", vec![Caret, Literal('a'), Dollar])] // ^a$
+        #[case("anchor_in_middle_of_concatenation", vec![Literal('a'), Caret, Literal('b')])] // a^b
+        #[case("anchor_in_alternation", vec![Literal('a'), Pipe, Caret, Literal('b')])] // a|^b
+        #[case("alternation_of_anchors", vec![Caret, Pipe, Dollar])] // ^|$
+        #[case("anchor_at_start_of_group", vec![LParen, Caret, Literal('a'), RParen])] // (^a)
+        #[case("anchor_at_end_of_group", vec![LParen, Literal('a'), Dollar, RParen])] // (a$)
+        #[case("quantified_start_anchor", vec![Caret, Star])] // ^*
+        #[case("quantified_end_anchor", vec![Literal('a'), Dollar, Plus])] // a$+
+        fn test_anchor_parsing(#[case] name: &str, #[case] tokens: Vec<Token>) {
+            let pattern_string = to_pattern_string(&tokens);
+            let ast_result = RegexAstNode::try_from(tokens);
+            INSTA_SETTINGS
+                .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
         }
     }
 }

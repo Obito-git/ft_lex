@@ -6,6 +6,13 @@ enum TransitionKind {
     Epsilon,
     Wildcard,
     WildcardExcept(HashSet<char>),
+    StartOfLineAssertion,
+    EndOfLineAssertion,
+}
+
+pub enum AnchorType {
+    StartOfLine,
+    EndOfLine,
 }
 
 #[derive(Clone)]
@@ -27,10 +34,16 @@ impl NfaTransition {
     fn matches(&self, c: char) -> bool {
         match &self.kind {
             TransitionKind::Symbol(symbol) => *symbol == c,
-            TransitionKind::Epsilon => false,
+            TransitionKind::Epsilon
+            | TransitionKind::StartOfLineAssertion
+            | TransitionKind::EndOfLineAssertion => false,
             TransitionKind::Wildcard => c != '\n',
             TransitionKind::WildcardExcept(set) => !set.contains(&c),
         }
+    }
+
+    fn kind(&self) -> &TransitionKind {
+        &self.kind
     }
 
     fn is_epsilon(&self) -> bool {
@@ -72,6 +85,22 @@ impl Nfa {
     pub fn from_char(c: char) -> Self {
         let mut nfa = Nfa::new();
         nfa.add_transition(0, 1, TransitionKind::Symbol(c));
+        nfa
+    }
+
+    pub fn from_anchor(anchor_type: AnchorType) -> Self {
+        let mut nfa = Self::new();
+
+        let start_state = nfa.start_state;
+        let accept_state = nfa.accept_state;
+
+        let transition_kind = match anchor_type {
+            AnchorType::StartOfLine => TransitionKind::StartOfLineAssertion,
+            AnchorType::EndOfLine => TransitionKind::EndOfLineAssertion,
+        };
+
+        nfa.add_transition(start_state, accept_state, transition_kind);
+
         nfa
     }
 
@@ -223,6 +252,7 @@ impl Nfa {
         res
     }
 
+    // TODO: review it was done to exact match but Idk for now how I should handle anchors here
     fn follow_epsilons(&self, initial_states: &[usize]) -> HashSet<usize> {
         let mut reachable = HashSet::new();
         let mut queue: VecDeque<usize> = VecDeque::new();
@@ -244,6 +274,7 @@ impl Nfa {
         reachable
     }
 
+    // TODO: review it was done to exact match but Idk for now how I should handle anchors here
     pub(crate) fn is_exact_match(&self, s: &str) -> bool {
         let mut current_states = Self::follow_epsilons(self, &[self.start_state]);
         for c in s.chars() {
@@ -266,9 +297,82 @@ impl Nfa {
         current_states.contains(&self.accept_state)
     }
 
-    //TODO: Do I need it in NFA? probably only in DFA
+    fn follow_epsilons_and_assertions(
+        &self,
+        initial_states: &[usize],
+        cur_idx: usize,
+        str_len: &usize,
+    ) -> HashSet<usize> {
+        let mut reachable = HashSet::new();
+        let mut queue: VecDeque<usize> = VecDeque::new();
+        let matches_line_start = cur_idx == 0;
+        let matches_line_end = cur_idx == *str_len;
+
+        for &state in initial_states {
+            if reachable.insert(state) {
+                queue.push_back(state);
+            }
+        }
+
+        while let Some(cur) = queue.pop_front() {
+            for t in &self.transitions {
+                let matched_transition = match t.kind() {
+                    TransitionKind::Epsilon => true,
+                    TransitionKind::StartOfLineAssertion => matches_line_start,
+                    TransitionKind::EndOfLineAssertion => matches_line_end,
+                    _ => false,
+                };
+
+                if t.start == cur && matched_transition && reachable.insert(t.end) {
+                    queue.push_back(t.end);
+                }
+            }
+        }
+
+        reachable
+    }
+
+    pub(crate) fn is_match(&self, s: &str) -> bool {
+        let str_len = s.len();
+
+        let mut current_states =
+            self.follow_epsilons_and_assertions(&[self.start_state], 0, &str_len);
+
+        for (i, c) in s.chars().enumerate() {
+            let next_states_after_char: Vec<usize> = current_states
+                .iter()
+                .flat_map(|&state| {
+                    self.transitions
+                        .iter()
+                        .filter(move |t| t.start == state && t.matches(c))
+                        .map(|t| t.end)
+                })
+                .collect();
+
+            let next_char_idx = i + 1;
+
+            current_states = self.follow_epsilons_and_assertions(
+                &next_states_after_char,
+                next_char_idx,
+                &str_len,
+            );
+
+            if current_states.is_empty() {
+                return false;
+            }
+        }
+
+        let final_states = self.follow_epsilons_and_assertions(
+            &current_states.into_iter().collect::<Vec<_>>(),
+            str_len,
+            &str_len,
+        );
+
+        final_states.contains(&self.accept_state)
+    }
+
     pub(crate) fn find(&self, s: &str) -> Option<()> {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -1313,6 +1417,89 @@ mod tests {
                 assert!(!nfa.is_exact_match("b"));
                 assert!(!nfa.is_exact_match("ca"));
                 assert!(!nfa.is_exact_match("ab"));
+            }
+        }
+    }
+
+    mod anchors {
+        use super::*;
+
+        mod start_of_string_anchor {
+            use super::*;
+
+            #[test]
+            fn should_match_pattern_at_start_of_string() {
+                // given: an NFA for `^a`
+                let mut nfa = Nfa::from_anchor(AnchorType::StartOfLine);
+                nfa.concatenate(&Nfa::from_char('a'));
+
+                // then:
+                assert!(nfa.is_match("a"));
+                assert!(!nfa.is_match("ab"));
+            }
+
+            #[test]
+            fn should_not_match_pattern_if_not_at_start() {
+                // given: an NFA for `^b`
+                let mut nfa = Nfa::from_anchor(AnchorType::StartOfLine);
+                nfa.concatenate(&Nfa::from_char('b'));
+
+                // then
+                assert!(!nfa.is_match("ab"));
+            }
+        }
+
+        mod end_of_string_anchor {
+            use super::*;
+
+            #[test]
+            fn should_match_pattern_at_end_of_string() {
+                // given: an NFA for `a$`
+                let mut nfa = Nfa::from_char('a');
+                nfa.concatenate(&Nfa::from_anchor(AnchorType::EndOfLine));
+
+                // then:
+                assert!(nfa.is_match("a"));
+                assert!(!nfa.is_match("ba"));
+            }
+
+            #[test]
+            fn should_not_match_pattern_if_not_at_end() {
+                // given: an NFA for `a$`
+                let mut nfa = Nfa::from_char('a');
+                nfa.concatenate(&Nfa::from_anchor(AnchorType::EndOfLine));
+
+                // then
+                assert!(!nfa.is_match("ab"));
+            }
+        }
+
+        mod combined_anchors {
+            use super::*;
+
+            #[test]
+            fn should_match_exact_string() {
+                // given: an NFA for `^a$`
+                let mut nfa = Nfa::from_anchor(AnchorType::StartOfLine);
+                nfa.concatenate(&Nfa::from_char('a'));
+                nfa.concatenate(&Nfa::from_anchor(AnchorType::EndOfLine));
+
+                // then
+                assert!(nfa.is_match("a"));
+                assert!(!nfa.is_match("b"));
+                assert!(!nfa.is_match("ab"));
+                assert!(!nfa.is_match("ba"));
+            }
+
+            #[test]
+            fn should_match_only_empty_string_for_caret_dollar() {
+                // given: an NFA for `^$`
+                let mut nfa = Nfa::from_anchor(AnchorType::StartOfLine);
+                nfa.concatenate(&Nfa::from_anchor(AnchorType::EndOfLine));
+
+                // then
+                assert!(nfa.is_match(""));
+                assert!(!nfa.is_match("a"));
             }
         }
     }

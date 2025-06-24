@@ -18,7 +18,7 @@ impl Regex {
         Ok(Self { nfa })
     }
 
-    pub fn matches(&self, s: &str) -> bool {
+    pub fn is_exact_match(&self, s: &str) -> bool {
         self.nfa.is_exact_match(s)
     }
 }

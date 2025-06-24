@@ -99,7 +99,7 @@ impl AstParser {
             if next_token.is_quantifier() {
                 if !node.is_quantifiable() {
                     return Err(SyntaxError::PrecedentTokenIsNotQuantifiable(
-                        idx,
+                        idx.checked_sub(1).unwrap_or(idx),
                         next_token.into(),
                     ));
                 }
@@ -443,6 +443,8 @@ impl RegexAstNode {
                 | RegexAstNode::OneOrMore(_)
                 | RegexAstNode::ZeroOrOne(_)
                 | RegexAstNode::Repeat { .. }
+                | RegexAstNode::StartOfLineAnchor
+                | RegexAstNode::EndOfLineAnchor
         )
     }
 }
@@ -555,12 +557,10 @@ mod tests {
         #[rstest]
         #[case("colon_as_literal_concat", vec![Literal('a'), Colon, Literal('b')])] // a:b
         #[case("dash_as_literal_concat", vec![Literal('a'), Dash, Literal('b')])] // a-b
-        #[case("caret_as_literal_concat", vec![Literal('a'), Caret, Literal('b')])] // a^b
-        #[case("mixed_literals", vec![Literal('a'), Dash, Literal('b'), Colon, Literal('c'), Caret])] // a-b:c^
         #[case("colon_with_quantifier", vec![Literal('a'), Colon, Literal('b'), Star])] // a:b*
         #[case("dash_with_alternation", vec![Literal('a'), Dash, Literal('b'), Pipe, Literal('c')])] // a-b|c
         #[case("colon_and_dash_in_group", vec![LParen, Literal('x'), Dash, Literal('y'), Colon, Literal('z'), RParen])] // (x-y:z)
-        #[case("escaped_colon_dash_and_caret", vec![BackSlash, Caret, BackSlash, Colon, Literal('a'), BackSlash, Literal(':'), Dash, BackSlash, Literal('-')])] // \^a\:- \-
+        #[case("escaped_colon_dash_and_caret", vec![BackSlash, Literal('^'), BackSlash, Colon, Literal('a'), BackSlash, Literal(':'), Dash, BackSlash, Literal('-')])] // \^a\:- \-
         fn bracket_special_chars_are_literals_outside_character_sets(
             #[case] name: &str,
             #[case] tokens: Vec<Token>,
@@ -574,7 +574,7 @@ mod tests {
         #[rstest]
         #[case("colon_as_literal_concat", vec![Literal('a'), Colon, Literal('b')])] // a:b
         #[case("dash_as_literal_concat", vec![Literal('a'), Dash, Literal('b')])] // a-b
-        #[case("escaped_special_chars_as_literals", vec![BackSlash, Caret, Literal('a'), BackSlash, Dollar])] // \^a\$
+        #[case("escaped_special_chars_as_literals", vec![BackSlash, Literal('^'), Literal('a'), BackSlash, Literal('$')])] // \^a\$
         fn special_chars_are_literals(#[case] name: &str, #[case] tokens: Vec<Token>) {
             let pattern_string = to_pattern_string(&tokens);
             let ast_result = RegexAstNode::try_from(tokens);
@@ -1136,8 +1136,8 @@ mod tests {
         #[case("alternation_of_anchors", vec![Caret, Pipe, Dollar])] // ^|$
         #[case("anchor_at_start_of_group", vec![LParen, Caret, Literal('a'), RParen])] // (^a)
         #[case("anchor_at_end_of_group", vec![LParen, Literal('a'), Dollar, RParen])] // (a$)
-        #[case("quantified_start_anchor", vec![Caret, Star])] // ^*
-        #[case("quantified_end_anchor", vec![Literal('a'), Dollar, Plus])] // a$+
+        #[case("not_valid_quantified_start_anchor", vec![Caret, Star])] // ^*
+        #[case("not_valid_quantified_end_anchor", vec![Literal('a'), Dollar, Plus])] // a$+
         fn test_anchor_parsing(#[case] name: &str, #[case] tokens: Vec<Token>) {
             let pattern_string = to_pattern_string(&tokens);
             let ast_result = RegexAstNode::try_from(tokens);

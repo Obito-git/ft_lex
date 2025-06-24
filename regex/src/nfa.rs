@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum TransitionKind {
@@ -24,8 +24,8 @@ struct NfaTransition {
 
 #[derive(Clone)]
 pub(crate) struct Nfa {
-    states_count: usize,             // for now only simple counter
-    transitions: Vec<NfaTransition>, // TODO: not vec, probably map or ?
+    states_count: usize, // for now only simple counter
+    transitions: HashMap<usize, Vec<NfaTransition>>,
     start_state: usize,
     accept_state: usize,
 }
@@ -53,7 +53,10 @@ impl NfaTransition {
 
 impl Nfa {
     fn add_transition(&mut self, start: usize, end: usize, kind: TransitionKind) {
-        self.transitions.push(NfaTransition { start, end, kind });
+        self.transitions
+            .entry(start)
+            .or_default()
+            .push(NfaTransition { start, end, kind });
     }
 
     fn add_state(&mut self) -> usize {
@@ -63,7 +66,7 @@ impl Nfa {
 
     fn new() -> Self {
         Nfa {
-            transitions: vec![],
+            transitions: HashMap::new(),
             start_state: 0,
             accept_state: 1,
             states_count: 2,
@@ -128,7 +131,7 @@ impl Nfa {
         self.states_count += other.states_count;
 
         // merge transitions but update including offsets
-        for t in &other.transitions {
+        for t in other.transitions.values().flatten() {
             self.add_transition(t.start + offset, t.end + offset, t.kind.clone());
         }
 
@@ -151,7 +154,7 @@ impl Nfa {
         self.states_count += other.states_count;
 
         // merge transitions but update including offsets
-        for t in &other.transitions {
+        for t in other.transitions.values().flatten() {
             self.add_transition(t.start + offset, t.end + offset, t.kind.clone());
         }
 
@@ -264,9 +267,11 @@ impl Nfa {
         }
 
         while let Some(cur) = queue.pop_front() {
-            for t in &self.transitions {
-                if t.start == cur && t.is_epsilon() && reachable.insert(t.end) {
-                    queue.push_back(t.end);
+            if let Some(transitions) = self.transitions.get(&cur) {
+                for t in transitions {
+                    if t.is_epsilon() && reachable.insert(t.end) {
+                        queue.push_back(t.end);
+                    }
                 }
             }
         }
@@ -280,11 +285,13 @@ impl Nfa {
         for c in s.chars() {
             let next_states_after_char: Vec<usize> = current_states
                 .iter()
-                .flat_map(|&state| {
+                .flat_map(|state| {
                     self.transitions
-                        .iter()
-                        .filter(move |t| t.start == state && t.matches(c))
-                        .map(|t| t.end)
+                        .get(state)
+                        .into_iter()
+                        .flat_map(|transitions| {
+                            transitions.iter().filter(|t| t.matches(c)).map(|t| t.end)
+                        })
                 })
                 .collect();
 
@@ -315,20 +322,20 @@ impl Nfa {
         }
 
         while let Some(cur) = queue.pop_front() {
-            for t in &self.transitions {
-                let matched_transition = match t.kind() {
-                    TransitionKind::Epsilon => true,
-                    TransitionKind::StartOfLineAssertion => matches_line_start,
-                    TransitionKind::EndOfLineAssertion => matches_line_end,
-                    _ => false,
-                };
-
-                if t.start == cur && matched_transition && reachable.insert(t.end) {
-                    queue.push_back(t.end);
+            if let Some(transitions) = self.transitions.get(&cur) {
+                for t in transitions {
+                    let matched_transition = match t.kind() {
+                        TransitionKind::Epsilon => true,
+                        TransitionKind::StartOfLineAssertion => matches_line_start,
+                        TransitionKind::EndOfLineAssertion => matches_line_end,
+                        _ => false,
+                    };
+                    if matched_transition && reachable.insert(t.end) {
+                        queue.push_back(t.end);
+                    }
                 }
             }
         }
-
         reachable
     }
 
@@ -341,11 +348,13 @@ impl Nfa {
         for (i, c) in s.chars().enumerate() {
             let next_states_after_char: Vec<usize> = current_states
                 .iter()
-                .flat_map(|&state| {
+                .flat_map(|state| {
                     self.transitions
-                        .iter()
-                        .filter(move |t| t.start == state && t.matches(c))
-                        .map(|t| t.end)
+                        .get(state)
+                        .into_iter()
+                        .flat_map(|transitions| {
+                            transitions.iter().filter(|t| t.matches(c)).map(|t| t.end)
+                        })
                 })
                 .collect();
 

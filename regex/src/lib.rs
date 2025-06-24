@@ -21,4 +21,8 @@ impl Regex {
     pub fn is_exact_match(&self, s: &str) -> bool {
         self.nfa.is_exact_match(s)
     }
+
+    pub fn is_match(&self, s: &str) -> bool {
+        self.nfa.is_match(s)
+    }
 }

@@ -6,7 +6,7 @@ pub const RegexAstNode = union(enum) {
     one_or_more: *RegexAstNode, // +
     zero_or_one: *RegexAstNode, // ?
     dot,
-    bracketExpression: BracketExpression,
+    bracket_expression: BracketExpression,
 };
 
 pub const Binary = struct {

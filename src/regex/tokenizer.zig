@@ -15,15 +15,28 @@ pub const Token = union(enum) {
     close_paren,
     open_bracket,
     close_bracket,
-    caret,
     colon,
     dash,
-    dollar,
+
+    pub fn is_quantifier(self: Token) bool {
+        return switch (self) {
+            // TODO: add {m,n} quantifiers
+            .star, .plus, .question_mark => true,
+            else => false,
+        };
+    }
+
+    pub fn is_literal_or_group(self: Token) bool {
+        return switch (self) {
+            .literal, .dot, .open_paren, .open_bracket .colon .dash .close_bracket => true,
+            else => false,
+        };
+    }
 };
 
 pub fn tokenize(allocator: std.mem.Allocator, pattern: []const u8) ![]Token {
-    var tokens = std.ArrayList(Token).init(allocator);
-    errdefer tokens.deinit();
+    var tokens: std.ArrayList(Token) = .empty;
+    errdefer tokens.deinit(allocator);
 
     var i: usize = 0;
     while (i < pattern.len) : (i += 1) {
@@ -34,11 +47,11 @@ pub fn tokenize(allocator: std.mem.Allocator, pattern: []const u8) ![]Token {
             }
 
             i += 1;
-            try tokens.append(.{ .literal = decode_escaped_byte(pattern[i]) });
+            try tokens.append(allocator, .{ .literal = decode_escaped_byte(pattern[i]) });
             continue;
         }
 
-        try tokens.append(switch (c) {
+        try tokens.append(allocator, switch (c) {
             '.' => .dot,
             '*' => .star,
             '+' => .plus,
@@ -48,15 +61,13 @@ pub fn tokenize(allocator: std.mem.Allocator, pattern: []const u8) ![]Token {
             ')' => .close_paren,
             '[' => .open_bracket,
             ']' => .close_bracket,
-            '^' => .caret,
             ':' => .colon,
             '-' => .dash,
-            '$' => .dollar,
             else => .{ .literal = c },
         });
     }
 
-    return tokens.toOwnedSlice();
+    return tokens.toOwnedSlice(allocator);
 }
 
 fn decode_escaped_byte(c: u8) u8 {

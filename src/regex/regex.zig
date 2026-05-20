@@ -22,3 +22,8 @@ pub const Regex = struct {
         _ = self;
     }
 };
+
+test {
+    _ = tokenizer;
+    _ = ast;
+}

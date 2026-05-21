@@ -9,8 +9,15 @@ pub const Regex = struct {
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, pattern: []const u8) !Regex {
-        const tokens = try tokenizer.tokenize(allocator, pattern);
-        defer allocator.free(tokens);
+        var arena_tmp = std.heap.ArenaAllocator.init(allocator);
+        defer arena_tmp.deinit();
+        const scratch_allocator = arena_tmp.allocator();
+
+        const tokens = try tokenizer.tokenize(scratch_allocator, pattern);
+        var parser = ast.RegexToAstParser.init(scratch_allocator, tokens);
+        const ast_root = try parser.parse();
+
+        _ = ast_root; // TODO
 
         return Regex{
             .allocator = allocator,

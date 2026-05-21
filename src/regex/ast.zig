@@ -4,9 +4,11 @@ const tokenizer = @import("tokenizer.zig");
 pub const RegexParseError = error{
     UnexpectedEndOfTokens,
     UnexpectedToken,
+    UnexpectedTokenInTheEndOfTheExpression,
     ExpressionStartedWithQuantifier,
     UnclosedParenthesis,
     PrecedentTokenIsNotQuantifiable,
+    InvalidSquareBracketsExpressionRange,
 };
 
 pub const RegexAstNode = union(enum) {
@@ -48,44 +50,70 @@ pub const Range = struct {
     end: u8,
 };
 
-pub fn parse(allocator: std.mem.Allocator, tokens: []const tokenizer.Token) !*RegexAstNode {
-    const ggg = Parser.init(tokens).parse();
-    _ = ggg;
-}
+pub const RegexToAstParser = struct {
+    const ParseError = std.mem.Allocator.Error || RegexParseError;
 
-const Parser = struct {
     tokens: []const tokenizer.Token,
     allocator: std.mem.Allocator,
     index: usize,
 
-    fn init(allocator: std.mem.Allocator, tokens: []const tokenizer.Token) Parser {
-        return Parser{
+    pub fn init(allocator: std.mem.Allocator, tokens: []const tokenizer.Token) RegexToAstParser {
+        return RegexToAstParser{
             .tokens = tokens,
             .allocator = allocator,
             .index = 0,
         };
     }
 
-    fn is_index_in_bounds(self: *Parser) bool {
+    fn is_index_in_bounds(self: *RegexToAstParser) bool {
         return self.index < self.tokens.len;
     }
 
-    fn peek(self: *Parser) ?tokenizer.Token {
+    fn peek(self: *RegexToAstParser) ?tokenizer.Token {
         if (self.is_index_in_bounds()) {
             return self.tokens[self.index];
         }
         return null;
     }
 
-    fn parse(self: *Parser) !*const RegexAstNode {
+    fn peek_second(self: *RegexToAstParser) ?tokenizer.Token {
+        if (self.index + 1 < self.tokens.len) {
+            return self.tokens[self.index + 1];
+        }
         return null;
     }
 
-    fn parse_alternation(self: *Parser) !*const RegexAstNode {
-        return null;
+    pub fn parse(self: *RegexToAstParser) ParseError!*RegexAstNode {
+        if (!self.is_index_in_bounds()) {
+            const node = try self.allocator.create(RegexAstNode);
+            node.* = .epsilon;
+            return node;
+        }
+
+        const root = try self.parse_alternation();
+
+        if (self.is_index_in_bounds()) {
+            return RegexParseError.UnexpectedTokenInTheEndOfTheExpression;
+        }
+
+        return root;
     }
 
-    fn parse_concatenation(self: *Parser) !*const RegexAstNode {
+    fn parse_alternation(self: *RegexToAstParser) ParseError!*RegexAstNode {
+        var left = try self.parse_concatenation();
+
+        while (self.peek()) |token| {
+            if (token != .pipe) break;
+            self.index += 1; // consume the '|'
+            const right = try self.parse_concatenation();
+            const new_left = try self.allocator.create(RegexAstNode);
+            new_left.* = .{ .alternate = .{ .left = left, .right = right } };
+            left = new_left;
+        }
+        return left;
+    }
+
+    fn parse_concatenation(self: *RegexToAstParser) ParseError!*RegexAstNode {
         var left = try self.parse_quantifier();
 
         while (true) {
@@ -105,7 +133,7 @@ const Parser = struct {
         return left;
     }
 
-    fn parse_quantifier(self: *Parser) !*const RegexAstNode {
+    fn parse_quantifier(self: *RegexToAstParser) ParseError!*RegexAstNode {
         const node = try self.parse_literal_or_group();
 
         if (self.peek()) |x| {
@@ -121,7 +149,7 @@ const Parser = struct {
         return node;
     }
 
-    fn parse_literal_or_group(self: *Parser) !*const RegexAstNode {
+    fn parse_literal_or_group(self: *RegexToAstParser) ParseError!*RegexAstNode {
         if (!self.is_index_in_bounds()) {
             return RegexParseError.UnexpectedEndOfTokens;
         }
@@ -151,37 +179,138 @@ const Parser = struct {
                 node.* = .dot;
                 return node;
             },
-            .open_square_bracket => {
-                self.allocator.destroy(node);
-                return try self.parse_square_bracket_expression();
+            .open_bracket => {
+                return try self.parse_square_bracket_expression(node);
             },
-            .close_square_bracket => {
+            .close_bracket => {
                 node.* = .{ .literal = ']' };
                 return node;
             },
             .open_paren => {
-                if (self.peek() == .close_paren) {
-                    self.index += 1; // consume the ')'
-                    node.* = .epsilon;
-                    return node;
+                if (self.peek()) |next| {
+                    if (next == .close_paren) {
+                        self.index += 1; // consume the ')'
+                        node.* = .epsilon;
+                        return node;
+                    }
                 }
+
                 const nested = try self.parse_alternation();
-                if (self.peek() != .close_paren) {
-                    return RegexParseError.UnclosedParenthesis;
+                if (self.peek()) |next| {
+                    if (next != .close_paren) {
+                        return RegexParseError.UnclosedParenthesis;
+                    }
+                    self.index += 1; // consume the ')'
+                    self.allocator.destroy(node);
+                    return nested;
                 }
-                self.index += 1; // consume the ')'
-                self.allocator.destroy(node);
-                return nested;
+
+                return RegexParseError.UnclosedParenthesis;
             },
             else => return RegexParseError.UnexpectedToken,
         }
     }
 
-    fn map_quantifier(self: *Parser, node: *const RegexAstNode) !*const RegexAstNode {
-        return null;
+    fn map_quantifier(self: *RegexToAstParser, node: *RegexAstNode) ParseError!*RegexAstNode {
+        const quantifier = self.peek().?;
+        self.index += 1; // consume the quantifier
+        const new_node = try self.allocator.create(RegexAstNode);
+        switch (quantifier) {
+            .star => new_node.* = .{ .zero_or_more = node },
+            .plus => new_node.* = .{ .one_or_more = node },
+            .question_mark => new_node.* = .{ .zero_or_one = node },
+            else => return RegexParseError.UnexpectedToken,
+        }
+        return new_node;
     }
 
-    fn parse_square_bracket_expression(self: *Parser) !*const RegexAstNode {
-        return null;
+    fn parse_square_bracket_expression(self: *RegexToAstParser, allocated_node: *RegexAstNode) ParseError!*RegexAstNode {
+        var is_negated = false;
+
+        if (self.peek()) |token| {
+            if (token == .caret) {
+                is_negated = true;
+                self.index += 1; // consume the '^'
+            }
+        }
+
+        //TODO: implement posix classes
+
+        var items: std.ArrayList(BracketItem) = .empty;
+        errdefer items.deinit(self.allocator);
+        try items.append(self.allocator, try self.parse_square_bracket_range());
+
+        while (self.peek()) |token| {
+            if (token == .close_bracket) break;
+            if (!self.is_index_in_bounds()) {
+                return RegexParseError.UnexpectedEndOfTokens;
+            }
+            try items.append(self.allocator, try self.parse_square_bracket_range());
+        }
+
+        if (self.peek() == null) {
+            return RegexParseError.UnexpectedEndOfTokens;
+        }
+
+        self.index += 1; // consume the ']'
+
+        allocated_node.* = .{ .bracket_expression = .{
+            .inverted = is_negated,
+            .items = try items.toOwnedSlice(self.allocator),
+        } };
+        return allocated_node;
+    }
+
+    fn parse_square_bracket_range(self: *RegexToAstParser) ParseError!BracketItem {
+        if (!self.is_index_in_bounds()) {
+            return RegexParseError.UnexpectedEndOfTokens;
+        }
+        const left = self.tokens[self.index].as_u8();
+        self.index += 1;
+
+        const next = self.peek() orelse return .{ .literal = left };
+        if (next != .dash) {
+            return .{ .literal = left };
+        }
+
+        if (self.peek_second()) |after_dash| {
+            if (after_dash == .close_bracket) {
+                return .{ .literal = left };
+            }
+        } else {
+            return .{ .literal = left };
+        }
+
+        self.index += 1; // consume the '-'
+
+        if (!self.is_index_in_bounds()) {
+            return RegexParseError.UnexpectedEndOfTokens;
+        }
+        const right = self.tokens[self.index].as_u8();
+        self.index += 1;
+
+        if (left > right) {
+            return RegexParseError.InvalidSquareBracketsExpressionRange;
+        }
+
+        return .{ .range = .{ .start = left, .end = right } };
     }
 };
+
+test "multiple literals" {
+    const pattern = "abc";
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const tokens = try tokenizer.tokenize(allocator, pattern);
+
+    var parser = RegexToAstParser.init(allocator, tokens);
+    const ast_root = try parser.parse();
+
+    try std.testing.expect(ast_root.* == .concat);
+    try std.testing.expect(ast_root.concat.left.* == .concat);
+    try std.testing.expectEqualDeep(RegexAstNode{ .literal = 'a' }, ast_root.concat.left.concat.left.*);
+    try std.testing.expectEqualDeep(RegexAstNode{ .literal = 'b' }, ast_root.concat.left.concat.right.*);
+    try std.testing.expectEqualDeep(RegexAstNode{ .literal = 'c' }, ast_root.concat.right.*);
+}

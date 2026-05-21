@@ -15,6 +15,7 @@ pub const Token = union(enum) {
     close_paren,
     open_bracket,
     close_bracket,
+    caret,
     colon,
     dash,
 
@@ -28,8 +29,26 @@ pub const Token = union(enum) {
 
     pub fn is_literal_or_group(self: Token) bool {
         return switch (self) {
-            .literal, .dot, .open_paren, .open_bracket .colon .dash .close_bracket => true,
+            .literal, .dot, .open_paren, .open_bracket, .colon, .dash, .close_bracket => true,
             else => false,
+        };
+    }
+
+    pub fn as_u8(self: Token) u8 {
+        return switch (self) {
+            .literal => self.literal,
+            .dot => '.',
+            .star => '*',
+            .plus => '+',
+            .question_mark => '?',
+            .pipe => '|',
+            .open_paren => '(',
+            .close_paren => ')',
+            .open_bracket => '[',
+            .close_bracket => ']',
+            .caret => '^',
+            .colon => ':',
+            .dash => '-',
         };
     }
 };
@@ -61,6 +80,7 @@ pub fn tokenize(allocator: std.mem.Allocator, pattern: []const u8) ![]Token {
             ')' => .close_paren,
             '[' => .open_bracket,
             ']' => .close_bracket,
+            '^' => .caret,
             ':' => .colon,
             '-' => .dash,
             else => .{ .literal = c },

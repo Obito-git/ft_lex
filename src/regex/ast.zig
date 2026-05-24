@@ -297,29 +297,138 @@ pub const RegexToAstParser = struct {
     }
 };
 
-test "parse precedence of alternation and concatenation" {
-    const pattern = "ab|c";
-    const expected =
-        \\(alt
-        \\  (concat
-        \\    (literal 'a')
-        \\    (literal 'b'))
-        \\  (literal 'c'))
-    ;
+test "parse valid patterns" {
+    const cases = [_]struct {
+        pattern: []const u8,
+        expected: []const u8,
+    }{
+        .{ .pattern = "", .expected = "(epsilon)" },
+        .{ .pattern = "a", .expected = "(literal 'a')" },
+        .{ .pattern = ".", .expected = "(dot)" },
+        .{
+            .pattern = "ab",
+            .expected =
+            \\(concat
+            \\  (literal 'a')
+            \\  (literal 'b'))
+            ,
+        },
+        .{
+            .pattern = "abc",
+            .expected =
+            \\(concat
+            \\  (concat
+            \\    (literal 'a')
+            \\    (literal 'b'))
+            \\  (literal 'c'))
+            ,
+        },
+        .{
+            .pattern = "a|b",
+            .expected =
+            \\(alt
+            \\  (literal 'a')
+            \\  (literal 'b'))
+            ,
+        },
+        .{
+            .pattern = "ab|c",
+            .expected =
+            \\(alt
+            \\  (concat
+            \\    (literal 'a')
+            \\    (literal 'b'))
+            \\  (literal 'c'))
+            ,
+        },
+        .{
+            .pattern = "a|bc",
+            .expected =
+            \\(alt
+            \\  (literal 'a')
+            \\  (concat
+            \\    (literal 'b')
+            \\    (literal 'c')))
+            ,
+        },
+        .{
+            .pattern = "a*",
+            .expected =
+            \\(zero_or_more
+            \\  (literal 'a'))
+            ,
+        },
+        .{
+            .pattern = "a+",
+            .expected =
+            \\(one_or_more
+            \\  (literal 'a'))
+            ,
+        },
+        .{
+            .pattern = "a?",
+            .expected =
+            \\(zero_or_one
+            \\  (literal 'a'))
+            ,
+        },
+        .{
+            .pattern = "a(b|c)",
+            .expected =
+            \\(concat
+            \\  (literal 'a')
+            \\  (alt
+            \\    (literal 'b')
+            \\    (literal 'c')))
+            ,
+        },
+        .{ .pattern = "()", .expected = "(epsilon)" },
+        .{
+            .pattern = "[abc]",
+            .expected =
+            \\(bracket_expression
+            \\  inverted=false
+            \\  (literal 'a')
+            \\  (literal 'b')
+            \\  (literal 'c'))
+            ,
+        },
+        .{
+            .pattern = "[a-z]",
+            .expected =
+            \\(bracket_expression
+            \\  inverted=false
+            \\  (range 'a' 'z'))
+            ,
+        },
+        .{
+            .pattern = "[^a-z]",
+            .expected =
+            \\(bracket_expression
+            \\  inverted=true
+            \\  (range 'a' 'z'))
+            ,
+        },
+    };
 
-    try expect_ast_dump(pattern, expected);
+    for (cases) |case| {
+        try expect_ast_dump(case.pattern, case.expected);
+    }
 }
 
-test "parse errors" {
+test "reject invalid patterns" {
     const cases = [_]struct {
         pattern: []const u8,
         expected_error: RegexParseError,
     }{
         .{ .pattern = "*", .expected_error = error.ExpressionStartedWithQuantifier },
+        .{ .pattern = "|a", .expected_error = error.UnexpectedToken },
         .{ .pattern = "a)", .expected_error = error.UnexpectedTokenInTheEndOfTheExpression },
+        .{ .pattern = "a|", .expected_error = error.UnexpectedEndOfTokens },
         .{ .pattern = "(a", .expected_error = error.UnclosedParenthesis },
         .{ .pattern = "[", .expected_error = error.UnexpectedEndOfTokens },
         .{ .pattern = "[]", .expected_error = error.UnexpectedEndOfTokens },
+        .{ .pattern = "[a", .expected_error = error.UnexpectedEndOfTokens },
         .{ .pattern = "[z-a]", .expected_error = error.InvalidSquareBracketsExpressionRange },
     };
 
@@ -379,7 +488,48 @@ fn write_node(
         .zero_or_more => |child| try write_unary_node(allocator, out, "zero_or_more", child, depth),
         .one_or_more => |child| try write_unary_node(allocator, out, "one_or_more", child, depth),
         .zero_or_one => |child| try write_unary_node(allocator, out, "zero_or_one", child, depth),
-        .bracket_expression => try out.appendSlice(allocator, "(bracket_expression ...)"),
+        .bracket_expression => |expr| try write_bracket_expression(allocator, out, expr, depth),
+    }
+}
+
+fn write_bracket_expression(
+    allocator: std.mem.Allocator,
+    out: *std.ArrayList(u8),
+    expr: BracketExpression,
+    depth: usize,
+) std.mem.Allocator.Error!void {
+    try out.appendSlice(allocator, "(bracket_expression");
+    try out.append(allocator, '\n');
+    try append_indent(allocator, out, depth + 1);
+    try out.appendSlice(allocator, if (expr.inverted) "inverted=true" else "inverted=false");
+
+    for (expr.items) |item| {
+        try out.append(allocator, '\n');
+        try append_indent(allocator, out, depth + 1);
+        try write_bracket_item(allocator, out, item);
+    }
+
+    try out.append(allocator, ')');
+}
+
+fn write_bracket_item(
+    allocator: std.mem.Allocator,
+    out: *std.ArrayList(u8),
+    item: BracketItem,
+) std.mem.Allocator.Error!void {
+    switch (item) {
+        .literal => |value| {
+            try out.appendSlice(allocator, "(literal '");
+            try append_escaped_char(allocator, out, value);
+            try out.appendSlice(allocator, "')");
+        },
+        .range => |range| {
+            try out.appendSlice(allocator, "(range '");
+            try append_escaped_char(allocator, out, range.start);
+            try out.appendSlice(allocator, "' '");
+            try append_escaped_char(allocator, out, range.end);
+            try out.appendSlice(allocator, "')");
+        },
     }
 }
 

@@ -297,20 +297,138 @@ pub const RegexToAstParser = struct {
     }
 };
 
-test "multiple literals" {
-    const pattern = "abc";
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+test "parse precedence of alternation and concatenation" {
+    const pattern = "ab|c";
+    const expected =
+        \\(alt
+        \\  (concat
+        \\    (literal 'a')
+        \\    (literal 'b'))
+        \\  (literal 'c'))
+    ;
+
+    try expect_ast_dump(pattern, expected);
+}
+
+test "parse errors" {
+    const cases = [_]struct {
+        pattern: []const u8,
+        expected_error: RegexParseError,
+    }{
+        .{ .pattern = "*", .expected_error = error.ExpressionStartedWithQuantifier },
+        .{ .pattern = "a)", .expected_error = error.UnexpectedTokenInTheEndOfTheExpression },
+        .{ .pattern = "(a", .expected_error = error.UnclosedParenthesis },
+        .{ .pattern = "[", .expected_error = error.UnexpectedEndOfTokens },
+        .{ .pattern = "[]", .expected_error = error.UnexpectedEndOfTokens },
+        .{ .pattern = "[z-a]", .expected_error = error.InvalidSquareBracketsExpressionRange },
+    };
+
+    for (cases) |case| {
+        try expect_parse_error(case.pattern, case.expected_error);
+    }
+}
+
+fn expect_ast_dump(pattern: []const u8, expected: []const u8) !void {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const allocator = arena.allocator();
 
-    const tokens = try tokenizer.tokenize(allocator, pattern);
+    const tokens = try tokenizer.tokenize(arena.allocator(), pattern);
+    var parser = RegexToAstParser.init(arena.allocator(), tokens);
+    const root = try parser.parse();
 
-    var parser = RegexToAstParser.init(allocator, tokens);
-    const ast_root = try parser.parse();
+    const actual = try dump_ast(std.testing.allocator, root);
+    defer std.testing.allocator.free(actual);
 
-    try std.testing.expect(ast_root.* == .concat);
-    try std.testing.expect(ast_root.concat.left.* == .concat);
-    try std.testing.expectEqualDeep(RegexAstNode{ .literal = 'a' }, ast_root.concat.left.concat.left.*);
-    try std.testing.expectEqualDeep(RegexAstNode{ .literal = 'b' }, ast_root.concat.left.concat.right.*);
-    try std.testing.expectEqualDeep(RegexAstNode{ .literal = 'c' }, ast_root.concat.right.*);
+    try std.testing.expectEqualStrings(expected, actual);
+}
+
+fn expect_parse_error(pattern: []const u8, expected_error: RegexParseError) !void {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const tokens = try tokenizer.tokenize(arena.allocator(), pattern);
+    var parser = RegexToAstParser.init(arena.allocator(), tokens);
+
+    try std.testing.expectError(expected_error, parser.parse());
+}
+
+fn dump_ast(allocator: std.mem.Allocator, root: *const RegexAstNode) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+
+    try write_node(allocator, &out, root, 0);
+    return out.toOwnedSlice(allocator);
+}
+
+fn write_node(
+    allocator: std.mem.Allocator,
+    out: *std.ArrayList(u8),
+    node: *const RegexAstNode,
+    depth: usize,
+) std.mem.Allocator.Error!void {
+    switch (node.*) {
+        .epsilon => try out.appendSlice(allocator, "(epsilon)"),
+        .literal => |value| {
+            try out.appendSlice(allocator, "(literal '");
+            try append_escaped_char(allocator, out, value);
+            try out.appendSlice(allocator, "')");
+        },
+        .dot => try out.appendSlice(allocator, "(dot)"),
+        .concat => |binary| try write_binary_node(allocator, out, "concat", binary, depth),
+        .alternate => |binary| try write_binary_node(allocator, out, "alt", binary, depth),
+        .zero_or_more => |child| try write_unary_node(allocator, out, "zero_or_more", child, depth),
+        .one_or_more => |child| try write_unary_node(allocator, out, "one_or_more", child, depth),
+        .zero_or_one => |child| try write_unary_node(allocator, out, "zero_or_one", child, depth),
+        .bracket_expression => try out.appendSlice(allocator, "(bracket_expression ...)"),
+    }
+}
+
+fn write_binary_node(
+    allocator: std.mem.Allocator,
+    out: *std.ArrayList(u8),
+    name: []const u8,
+    binary: Binary,
+    depth: usize,
+) std.mem.Allocator.Error!void {
+    try out.append(allocator, '(');
+    try out.appendSlice(allocator, name);
+    try out.append(allocator, '\n');
+    try append_indent(allocator, out, depth + 1);
+    try write_node(allocator, out, binary.left, depth + 1);
+    try out.append(allocator, '\n');
+    try append_indent(allocator, out, depth + 1);
+    try write_node(allocator, out, binary.right, depth + 1);
+    try out.append(allocator, ')');
+}
+
+fn write_unary_node(
+    allocator: std.mem.Allocator,
+    out: *std.ArrayList(u8),
+    name: []const u8,
+    child: *const RegexAstNode,
+    depth: usize,
+) std.mem.Allocator.Error!void {
+    try out.append(allocator, '(');
+    try out.appendSlice(allocator, name);
+    try out.append(allocator, '\n');
+    try append_indent(allocator, out, depth + 1);
+    try write_node(allocator, out, child, depth + 1);
+    try out.append(allocator, ')');
+}
+
+fn append_indent(allocator: std.mem.Allocator, out: *std.ArrayList(u8), depth: usize) std.mem.Allocator.Error!void {
+    for (0..depth) |_| {
+        try out.appendSlice(allocator, "  ");
+    }
+}
+
+fn append_escaped_char(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: u8) std.mem.Allocator.Error!void {
+    switch (value) {
+        '\n' => try out.appendSlice(allocator, "\\n"),
+        '\r' => try out.appendSlice(allocator, "\\r"),
+        '\t' => try out.appendSlice(allocator, "\\t"),
+        '\\' => try out.appendSlice(allocator, "\\\\"),
+        '\'' => try out.appendSlice(allocator, "\\'"),
+        else => try out.append(allocator, value),
+    }
 }

@@ -134,16 +134,14 @@ pub const RegexToAstParser = struct {
     }
 
     fn parse_quantifier(self: *RegexToAstParser) ParseError!*RegexAstNode {
-        const node = try self.parse_literal_or_group();
+        var node = try self.parse_literal_or_group();
 
-        if (self.peek()) |x| {
-            if (!x.is_quantifier()) {
-                return node;
-            }
+        while (self.peek()) |x| {
+            if (!x.is_quantifier()) break;
             if (!node.is_quantifiable()) {
                 return RegexParseError.PrecedentTokenIsNotQuantifiable;
             }
-            return try self.map_quantifier(node);
+            node = try self.map_quantifier(node);
         }
 
         return node;
@@ -359,6 +357,15 @@ test "parse valid patterns" {
             ,
         },
         .{
+            .pattern = "ab*",
+            .expected =
+            \\(concat
+            \\  (literal 'a')
+            \\  (zero_or_more
+            \\    (literal 'b')))
+            ,
+        },
+        .{
             .pattern = "a+",
             .expected =
             \\(one_or_more
@@ -380,6 +387,15 @@ test "parse valid patterns" {
             \\  (alt
             \\    (literal 'b')
             \\    (literal 'c')))
+            ,
+        },
+        .{
+            .pattern = "(ab)*",
+            .expected =
+            \\(zero_or_more
+            \\  (concat
+            \\    (literal 'a')
+            \\    (literal 'b')))
             ,
         },
         .{ .pattern = "()", .expected = "(epsilon)" },
@@ -409,6 +425,35 @@ test "parse valid patterns" {
             \\  (range 'a' 'z'))
             ,
         },
+        .{
+            .pattern = "[a-zA-Z0-9_]",
+            .expected =
+            \\(bracket_expression
+            \\  inverted=false
+            \\  (range 'a' 'z')
+            \\  (range 'A' 'Z')
+            \\  (range '0' '9')
+            \\  (literal '_'))
+            ,
+        },
+        .{
+            .pattern = "[-a]",
+            .expected =
+            \\(bracket_expression
+            \\  inverted=false
+            \\  (literal '-')
+            \\  (literal 'a'))
+            ,
+        },
+        .{
+            .pattern = "[a-]",
+            .expected =
+            \\(bracket_expression
+            \\  inverted=false
+            \\  (literal 'a')
+            \\  (literal '-'))
+            ,
+        },
     };
 
     for (cases) |case| {
@@ -426,6 +471,7 @@ test "reject invalid patterns" {
         .{ .pattern = "a)", .expected_error = error.UnexpectedTokenInTheEndOfTheExpression },
         .{ .pattern = "a|", .expected_error = error.UnexpectedEndOfTokens },
         .{ .pattern = "(a", .expected_error = error.UnclosedParenthesis },
+        .{ .pattern = "a*+", .expected_error = error.PrecedentTokenIsNotQuantifiable },
         .{ .pattern = "[", .expected_error = error.UnexpectedEndOfTokens },
         .{ .pattern = "[]", .expected_error = error.UnexpectedEndOfTokens },
         .{ .pattern = "[a", .expected_error = error.UnexpectedEndOfTokens },

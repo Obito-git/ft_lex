@@ -330,6 +330,16 @@ test "parse valid patterns" {
             ,
         },
         .{
+            .pattern = "a|b|c",
+            .expected =
+            \\(alt
+            \\  (alt
+            \\    (literal 'a')
+            \\    (literal 'b'))
+            \\  (literal 'c'))
+            ,
+        },
+        .{
             .pattern = "ab|c",
             .expected =
             \\(alt
@@ -390,6 +400,17 @@ test "parse valid patterns" {
             ,
         },
         .{
+            .pattern = "a(b)c",
+            .expected =
+            \\(concat
+            \\  (concat
+            \\    (literal 'a')
+            \\    (literal 'b'))
+            \\  (literal 'c'))
+            ,
+        },
+        .{ .pattern = "((a))", .expected = "(literal 'a')" },
+        .{
             .pattern = "(ab)*",
             .expected =
             \\(zero_or_more
@@ -399,6 +420,34 @@ test "parse valid patterns" {
             ,
         },
         .{ .pattern = "()", .expected = "(epsilon)" },
+        .{
+            .pattern = "a|()",
+            .expected =
+            \\(alt
+            \\  (literal 'a')
+            \\  (epsilon))
+            ,
+        },
+        .{
+            .pattern = "a()b",
+            .expected =
+            \\(concat
+            \\  (concat
+            \\    (literal 'a')
+            \\    (epsilon))
+            \\  (literal 'b'))
+            ,
+        },
+        .{
+            .pattern = "\\*\\(\\n",
+            .expected =
+            \\(concat
+            \\  (concat
+            \\    (literal '*')
+            \\    (literal '('))
+            \\  (literal '\n'))
+            ,
+        },
         .{
             .pattern = "[abc]",
             .expected =
@@ -454,6 +503,38 @@ test "parse valid patterns" {
             \\  (literal '-'))
             ,
         },
+        .{
+            .pattern = "[]]",
+            .expected =
+            \\(bracket_expression
+            \\  inverted=false
+            \\  (literal ']'))
+            ,
+        },
+        .{
+            .pattern = "[\\]]",
+            .expected =
+            \\(bracket_expression
+            \\  inverted=false
+            \\  (literal ']'))
+            ,
+        },
+        .{
+            .pattern = "[^]]",
+            .expected =
+            \\(bracket_expression
+            \\  inverted=true
+            \\  (literal ']'))
+            ,
+        },
+        .{
+            .pattern = "[^^]",
+            .expected =
+            \\(bracket_expression
+            \\  inverted=true
+            \\  (literal '^'))
+            ,
+        },
     };
 
     for (cases) |case| {
@@ -470,8 +551,11 @@ test "reject invalid patterns" {
         .{ .pattern = "|a", .expected_error = error.UnexpectedToken },
         .{ .pattern = "a)", .expected_error = error.UnexpectedTokenInTheEndOfTheExpression },
         .{ .pattern = "a|", .expected_error = error.UnexpectedEndOfTokens },
+        .{ .pattern = "a|*", .expected_error = error.ExpressionStartedWithQuantifier },
         .{ .pattern = "(a", .expected_error = error.UnclosedParenthesis },
+        .{ .pattern = "(|a)", .expected_error = error.UnexpectedToken },
         .{ .pattern = "a*+", .expected_error = error.PrecedentTokenIsNotQuantifiable },
+        .{ .pattern = "a??", .expected_error = error.PrecedentTokenIsNotQuantifiable },
         .{ .pattern = "[", .expected_error = error.UnexpectedEndOfTokens },
         .{ .pattern = "[]", .expected_error = error.UnexpectedEndOfTokens },
         .{ .pattern = "[a", .expected_error = error.UnexpectedEndOfTokens },

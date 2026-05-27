@@ -1,0 +1,14 @@
+# Project pre-commit hooks. Requires external `pre-commit` tool.
+# Install once with:
+#   pipx install pre-commit
+#   pre-commit install
+# Then this hook runs Rust formatting before each commit.
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

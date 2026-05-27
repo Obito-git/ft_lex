@@ -1,7 +1,7 @@
-use std::process::exit;
-use std::{env, fs};
 use ft_lex_lib::error::{LexError, LexErrorKind};
 use ft_lex_lib::tokenizer::LexFileTokenizer;
+use std::process::exit;
+use std::{env, fs};
 
 //TODO: just basic example by AI, to be refactored
 pub fn format_lex_error(error: &LexError, source: &str, filename: String) -> String {
@@ -19,7 +19,7 @@ pub fn format_lex_error(error: &LexError, source: &str, filename: String) -> Str
             message.push_str(&format!("Internal Lexer Error: {}", msg));
             return message;
         }
-        _ => unimplemented!()
+        _ => unimplemented!(),
     }
     message.push('\n');
 
@@ -38,7 +38,6 @@ pub fn format_lex_error(error: &LexError, source: &str, filename: String) -> Str
 
     message
 }
-
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();

@@ -412,45 +412,6 @@ pub(crate) enum RegexAstNode {
 impl RegexAstNode {
     // TODO: decide if I want to use self of &self. Probably I can drop reference cause the ast is
     // not used after building the nfa?
-    pub(crate) fn to_nfa(&self) -> Nfa {
-        match self {
-            RegexAstNode::Literal(c) => Nfa::from_char(*c),
-            RegexAstNode::Wildcard => Nfa::from_wildcard(),
-            RegexAstNode::Concat(left, right) => {
-                let mut left_nfa = left.to_nfa();
-                let right_nfa = right.to_nfa();
-
-                left_nfa.concatenate(&right_nfa);
-                left_nfa
-            }
-            RegexAstNode::Alter(left, right) => {
-                let mut left_nfa = left.to_nfa();
-                let right_nfa = right.to_nfa();
-
-                left_nfa.alternate(&right_nfa);
-                left_nfa
-            }
-            RegexAstNode::Star(regex_ast_node) => {
-                let mut nfa_child = regex_ast_node.to_nfa();
-
-                nfa_child.kleene_star();
-                nfa_child
-            }
-            RegexAstNode::Empty => Nfa::from_epsilon(),
-            RegexAstNode::ZeroOrOne(_) => todo!(),
-            RegexAstNode::OneOrMore(_) => todo!(),
-            RegexAstNode::Repeat {
-                node,
-                lower_bound,
-                upper_bound,
-            } => Nfa::from_range(&node.to_nfa(), *lower_bound, *upper_bound),
-            RegexAstNode::BracketExpression { is_negated, expr } => {
-                Nfa::from_char_set(*is_negated, expr)
-            }
-            RegexAstNode::StartOfLineAnchor => Nfa::from_anchor(AnchorType::StartOfLine),
-            RegexAstNode::EndOfLineAnchor => Nfa::from_anchor(AnchorType::EndOfLine),
-        }
-    }
 
     pub(crate) fn new(tokens: Vec<Token>) -> Result<Self, String> {
         AstParser::parse(tokens).map_err(|e| format!("{e:?}"))

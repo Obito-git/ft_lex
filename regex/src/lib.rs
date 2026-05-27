@@ -15,7 +15,7 @@ impl Regex {
     pub fn new(pattern: &str) -> Result<Self, String> {
         let tokens = tokenize(pattern).map_err(|e| format!("{e:?}"))?;
         let ast = RegexAstNode::new(tokens)?;
-        let nfa = ast.to_nfa();
+        let nfa = Nfa::from(ast);
 
         Ok(Self { nfa })
     }

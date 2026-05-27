@@ -1,3 +1,4 @@
+use crate::ast::RegexAstNode;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -382,6 +383,48 @@ impl Nfa {
 
     pub(crate) fn find(&self, s: &str) -> Option<()> {
         unimplemented!()
+    }
+}
+
+impl From<RegexAstNode> for Nfa {
+    fn from(value: RegexAstNode) -> Self {
+        match value {
+            RegexAstNode::Literal(c) => Nfa::from_char(c),
+            RegexAstNode::Wildcard => Nfa::from_wildcard(),
+            RegexAstNode::Concat(left, right) => {
+                let mut left_nfa = Self::from(*left);
+                let right_nfa = Self::from(*right);
+
+                left_nfa.concatenate(&right_nfa);
+                left_nfa
+            }
+            RegexAstNode::Alter(left, right) => {
+                let mut left_nfa = Self::from(*left);
+                let right_nfa = Self::from(*right);
+
+                left_nfa.alternate(&right_nfa);
+                left_nfa
+            }
+            RegexAstNode::Star(regex_ast_node) => {
+                let mut nfa_child = Self::from(*regex_ast_node);
+
+                nfa_child.kleene_star();
+                nfa_child
+            }
+            RegexAstNode::Empty => Nfa::from_epsilon(),
+            RegexAstNode::ZeroOrOne(_) => todo!(),
+            RegexAstNode::OneOrMore(_) => todo!(),
+            RegexAstNode::Repeat {
+                node,
+                lower_bound,
+                upper_bound,
+            } => Nfa::from_range(&Self::from(*node), lower_bound, upper_bound),
+            RegexAstNode::BracketExpression { is_negated, expr } => {
+                Nfa::from_char_set(is_negated, &expr)
+            }
+            RegexAstNode::StartOfLineAnchor => Nfa::from_anchor(AnchorType::StartOfLine),
+            RegexAstNode::EndOfLineAnchor => Nfa::from_anchor(AnchorType::EndOfLine),
+        }
     }
 }
 

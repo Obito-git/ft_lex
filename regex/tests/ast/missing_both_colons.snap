@@ -8,9 +8,10 @@ expression: "(pattern_string, ast_result)"
       - BracketExpression:
           is_negated: false
           expr:
-            - "["
-            - d
-            - g
-            - i
-            - t
+            - Literal: "["
+            - Literal: d
+            - Literal: i
+            - Literal: g
+            - Literal: i
+            - Literal: t
       - Literal: "]"

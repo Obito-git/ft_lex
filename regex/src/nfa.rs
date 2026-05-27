@@ -1,4 +1,4 @@
-use crate::ast::RegexAstNode;
+use crate::ast::{BracketItem, RegexAstNode};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,6 +53,55 @@ impl NfaTransition {
 }
 
 impl Nfa {
+    fn add_bracket_item_transitions(&mut self, start: usize, accept: usize, item: &BracketItem) {
+        match item {
+            BracketItem::Literal(c) => {
+                self.add_transition(start, accept, TransitionKind::Symbol(*c));
+            }
+            BracketItem::Range {
+                start: range_start,
+                end: range_end,
+            } => {
+                for value in *range_start as u32..=*range_end as u32 {
+                    self.add_transition(
+                        start,
+                        accept,
+                        TransitionKind::Symbol(char::from_u32(value).unwrap()),
+                    );
+                }
+            }
+            BracketItem::PosixClass(class) => {
+                class.for_each_char(|c| {
+                    self.add_transition(start, accept, TransitionKind::Symbol(c));
+                });
+            }
+        }
+    }
+
+    fn resolve_bracket_items(items: &[BracketItem]) -> HashSet<char> {
+        let mut chars = HashSet::new();
+
+        for item in items {
+            match item {
+                BracketItem::Literal(c) => {
+                    chars.insert(*c);
+                }
+                BracketItem::Range { start, end } => {
+                    for value in *start as u32..=*end as u32 {
+                        chars.insert(char::from_u32(value).unwrap());
+                    }
+                }
+                BracketItem::PosixClass(class) => {
+                    class.for_each_char(|c| {
+                        chars.insert(c);
+                    });
+                }
+            }
+        }
+
+        chars
+    }
+
     fn add_transition(&mut self, start: usize, end: usize, kind: TransitionKind) {
         self.transitions
             .entry(start)
@@ -108,17 +157,21 @@ impl Nfa {
         nfa
     }
 
-    pub fn from_char_set(is_negated: bool, set: &HashSet<char>) -> Self {
+    pub fn from_bracket_items(is_negated: bool, items: &[BracketItem]) -> Self {
         let mut nfa = Self::new();
         let start = nfa.start_state;
         let accept = nfa.accept_state;
 
         if !is_negated {
-            for c in set {
-                nfa.add_transition(start, accept, TransitionKind::Symbol(*c));
+            for item in items {
+                nfa.add_bracket_item_transitions(start, accept, item);
             }
         } else {
-            nfa.add_transition(start, accept, TransitionKind::WildcardExcept(set.clone()));
+            nfa.add_transition(
+                start,
+                accept,
+                TransitionKind::WildcardExcept(Self::resolve_bracket_items(items)),
+            );
         }
 
         nfa
@@ -420,7 +473,7 @@ impl From<RegexAstNode> for Nfa {
                 upper_bound,
             } => Nfa::from_range(&Self::from(*node), lower_bound, upper_bound),
             RegexAstNode::BracketExpression { is_negated, expr } => {
-                Nfa::from_char_set(is_negated, &expr)
+                Nfa::from_bracket_items(is_negated, &expr)
             }
             RegexAstNode::StartOfLineAnchor => Nfa::from_anchor(AnchorType::StartOfLine),
             RegexAstNode::EndOfLineAnchor => Nfa::from_anchor(AnchorType::EndOfLine),
@@ -1255,6 +1308,15 @@ mod tests {
         use super::*;
         use std::collections::HashSet;
 
+        fn nfa_from_set(is_negated: bool, set: &HashSet<char>) -> Nfa {
+            let expr = set
+                .iter()
+                .copied()
+                .map(BracketItem::Literal)
+                .collect::<Vec<_>>();
+            Nfa::from_bracket_items(is_negated, &expr)
+        }
+
         mod positive_sets {
             use super::*;
 
@@ -1269,9 +1331,7 @@ mod tests {
                 #[case] set: HashSet<char>,
                 #[case] input: &str,
             ) {
-                // given
-                let nfa = Nfa::from_char_set(false, &set);
-                // then
+                let nfa = nfa_from_set(false, &set);
                 assert!(nfa.is_exact_match(input));
             }
 
@@ -1283,9 +1343,7 @@ mod tests {
                 #[case] set: HashSet<char>,
                 #[case] input: &str,
             ) {
-                // given
-                let nfa = Nfa::from_char_set(false, &set);
-                // then
+                let nfa = nfa_from_set(false, &set);
                 assert!(!nfa.is_exact_match(input));
             }
 
@@ -1297,9 +1355,7 @@ mod tests {
                 #[case] set: HashSet<char>,
                 #[case] input: &str,
             ) {
-                // given
-                let nfa = Nfa::from_char_set(false, &set);
-                // then
+                let nfa = nfa_from_set(false, &set);
                 assert!(!nfa.is_exact_match(input));
             }
         }
@@ -1309,9 +1365,8 @@ mod tests {
 
             #[test]
             fn should_work_with_concatenation() {
-                // given: an NFA for `[ab]c`
                 let set = HashSet::from(['a', 'b']);
-                let mut nfa = Nfa::from_char_set(false, &set);
+                let mut nfa = nfa_from_set(false, &set);
                 let nfa_c = Nfa::from_char('c');
                 nfa.concatenate(&nfa_c);
 
@@ -1324,9 +1379,8 @@ mod tests {
 
             #[test]
             fn should_work_with_alternation() {
-                // given: an NFA for `[ab]|c`
                 let set = HashSet::from(['a', 'b']);
-                let mut nfa = Nfa::from_char_set(false, &set);
+                let mut nfa = nfa_from_set(false, &set);
                 let nfa_c = Nfa::from_char('c');
                 nfa.alternate(&nfa_c);
 
@@ -1340,9 +1394,8 @@ mod tests {
 
             #[test]
             fn should_work_with_kleene_star() {
-                // given: an NFA for `[ab]*`
                 let set = HashSet::from(['a', 'b']);
-                let mut nfa = Nfa::from_char_set(false, &set);
+                let mut nfa = nfa_from_set(false, &set);
                 nfa.kleene_star();
 
                 // then
@@ -1359,9 +1412,8 @@ mod tests {
 
             #[test]
             fn should_work_with_one_or_more() {
-                // given: an NFA for `[ab]+`
                 let set = HashSet::from(['a', 'b']);
-                let mut nfa = Nfa::from_char_set(false, &set);
+                let mut nfa = nfa_from_set(false, &set);
                 nfa.one_or_more();
 
                 // then
@@ -1374,9 +1426,8 @@ mod tests {
 
             #[test]
             fn should_work_with_zero_or_one() {
-                // given: an NFA for `[ab]?`
                 let set = HashSet::from(['a', 'b']);
-                let mut nfa = Nfa::from_char_set(false, &set);
+                let mut nfa = nfa_from_set(false, &set);
                 nfa.zero_or_one();
 
                 // then
@@ -1402,9 +1453,7 @@ mod tests {
                 #[case] set: HashSet<char>,
                 #[case] input: &str,
             ) {
-                // given
-                let nfa = Nfa::from_char_set(true, &set);
-                // then
+                let nfa = nfa_from_set(true, &set);
                 assert!(nfa.is_exact_match(input));
             }
 
@@ -1417,9 +1466,7 @@ mod tests {
                 #[case] set: HashSet<char>,
                 #[case] input: &str,
             ) {
-                // given
-                let nfa = Nfa::from_char_set(true, &set);
-                // then
+                let nfa = nfa_from_set(true, &set);
                 assert!(!nfa.is_exact_match(input));
             }
 
@@ -1431,17 +1478,14 @@ mod tests {
                 #[case] set: HashSet<char>,
                 #[case] input: &str,
             ) {
-                // given
-                let nfa = Nfa::from_char_set(true, &set);
-                // then
+                let nfa = nfa_from_set(true, &set);
                 assert!(!nfa.is_exact_match(input));
             }
 
             #[test]
             fn should_work_with_concatenation() {
-                // given: an NFA for `[^a]c`
                 let set = HashSet::from(['a']);
-                let mut nfa = Nfa::from_char_set(true, &set);
+                let mut nfa = nfa_from_set(true, &set);
                 nfa.concatenate(&Nfa::from_char('c'));
 
                 // then
@@ -1455,9 +1499,8 @@ mod tests {
 
             #[test]
             fn should_work_with_kleene_star() {
-                // given: an NFA for `[^ab]*` (zero or more chars that are not 'a' or 'b')
                 let set = HashSet::from(['a', 'b']);
-                let mut nfa = Nfa::from_char_set(true, &set);
+                let mut nfa = nfa_from_set(true, &set);
                 nfa.kleene_star();
 
                 // then

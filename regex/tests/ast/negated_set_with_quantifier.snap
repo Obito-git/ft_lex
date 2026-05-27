@@ -8,4 +8,4 @@ expression: "(pattern_string, ast_result)"
       BracketExpression:
         is_negated: true
         expr:
-          - a
+          - Literal: a

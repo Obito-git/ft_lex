@@ -8,18 +8,12 @@ expression: "(pattern_string, ast_result)"
       - BracketExpression:
           is_negated: false
           expr:
-            - Z
-            - "["
-            - "\\"
-            - "]"
-            - ^
-            - _
-            - "`"
-            - a
+            - Range:
+                start: Z
+                end: a
       - BracketExpression:
           is_negated: false
           expr:
-            - c
-            - d
-            - e
-            - f
+            - Range:
+                start: c
+                end: f

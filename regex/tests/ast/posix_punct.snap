@@ -7,35 +7,4 @@ expression: "(pattern_string, ast_result)"
     BracketExpression:
       is_negated: false
       expr:
-        - "!"
-        - "\""
-        - "#"
-        - $
-        - "%"
-        - "&"
-        - "'"
-        - (
-        - )
-        - "*"
-        - +
-        - ","
-        - "-"
-        - "."
-        - /
-        - ":"
-        - ;
-        - "<"
-        - "="
-        - ">"
-        - "?"
-        - "@"
-        - "["
-        - "\\"
-        - "]"
-        - ^
-        - _
-        - "`"
-        - "{"
-        - "|"
-        - "}"
-        - "~"
+        - PosixClass: Punct

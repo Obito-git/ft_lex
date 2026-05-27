@@ -7,16 +7,6 @@ expression: "(pattern_string, ast_result)"
     BracketExpression:
       is_negated: false
       expr:
-        - "5"
-        - "6"
-        - "7"
-        - "8"
-        - "9"
-        - ":"
-        - ;
-        - "<"
-        - "="
-        - ">"
-        - "?"
-        - "@"
-        - A
+        - Range:
+            start: "5"
+            end: A

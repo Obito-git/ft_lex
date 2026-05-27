@@ -1,9 +1,8 @@
 #[cfg(test)]
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 
 use crate::RegexErr;
 use crate::token::Token;
-use std::collections::HashSet;
 
 struct AstParser {
     tokens: Vec<Token>,
@@ -28,6 +27,14 @@ impl QuantifierKind {
             _ => None,
         }
     }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(test, derive(Serialize))]
+pub(crate) enum BracketItem {
+    Literal(char),
+    Range { start: char, end: char },
+    PosixClass(PosixClass),
 }
 
 impl AstParser {
@@ -220,7 +227,7 @@ impl AstParser {
     }
 
     fn parse_square_bracket_expr(&mut self) -> Result<RegexAstNode, RegexErr> {
-        let mut expr = HashSet::new();
+        let mut items = Vec::new();
         let mut is_negated = false;
 
         if let Some(Token::Caret) = self.peek() {
@@ -230,7 +237,7 @@ impl AstParser {
 
         // in PCRE if ] is the first char it is treated as literal
         if let Some(Token::RSquareBracket) = self.peek() {
-            expr.insert(']');
+            items.push(BracketItem::Literal(']'));
             self.next();
         }
 
@@ -242,7 +249,7 @@ impl AstParser {
                 self.next();
                 self.next();
                 let posix_class = self.parse_posix_class()?;
-                expr.extend(HashSet::<char>::from(&posix_class));
+                items.push(BracketItem::PosixClass(posix_class));
                 if let Some((idx, Token::Dash)) = self.peek_enumerated() {
                     Err(RegexErr::RangeIsForbiddenForPosixClasses(idx))?
                 }
@@ -269,17 +276,18 @@ impl AstParser {
                             return Err(RegexErr::InvalidRangeInCharacterSet(start_char, end_char));
                         }
 
-                        for c_val in start_char as u32..=end_char as u32 {
-                            expr.insert(std::char::from_u32(c_val).unwrap());
-                        }
+                        items.push(BracketItem::Range {
+                            start: start_char,
+                            end: end_char,
+                        });
                         continue;
                     }
                 }
 
-                expr.insert(char::from(&start_token));
-                expr.insert('-');
+                items.push(BracketItem::Literal(char::from(&start_token)));
+                items.push(BracketItem::Literal('-'));
             } else {
-                expr.insert(char::from(&start_token));
+                items.push(BracketItem::Literal(char::from(&start_token)));
             }
         }
 
@@ -288,7 +296,10 @@ impl AstParser {
             Err(RegexErr::ExpectedClosingSquareBracket)?
         }
 
-        Ok(RegexAstNode::BracketExpression { is_negated, expr })
+        Ok(RegexAstNode::BracketExpression {
+            is_negated,
+            expr: items,
+        })
     }
 
     fn parse_bounded_quantifier(content: Vec<char>) -> Result<(u16, Option<u16>), RegexErr> {
@@ -326,19 +337,6 @@ impl AstParser {
     }
 }
 
-#[cfg(test)]
-fn sort_set<S, T, H>(
-    value: &std::collections::HashSet<T, H>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-    T: Ord + Serialize,
-{
-    let ordered: std::collections::BTreeSet<_> = value.iter().collect();
-    ordered.serialize(serializer)
-}
-
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 #[cfg_attr(test, derive(Serialize))]
 pub(crate) enum PosixClass {
@@ -355,6 +353,10 @@ pub(crate) enum PosixClass {
     Upper,
     Xdigit,
 }
+
+const POSIX_BLANK_CHARS: [char; 2] = [' ', '\t'];
+const POSIX_SPACE_CHARS: [char; 6] = [' ', '\t', '\n', '\r', '\x0B', '\x0C'];
+const POSIX_PUNCT_CHARS: &str = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
 impl TryFrom<&str> for PosixClass {
     type Error = ();
@@ -378,24 +380,85 @@ impl TryFrom<&str> for PosixClass {
     }
 }
 
-impl From<&PosixClass> for HashSet<char> {
-    fn from(value: &PosixClass) -> Self {
-        match value {
-            PosixClass::Alnum => ('a'..='z').chain('A'..='Z').chain('0'..='9').collect(),
-            PosixClass::Alpha => ('a'..='z').chain('A'..='Z').collect(),
-            PosixClass::Blank => HashSet::from([' ', '\t']),
-            PosixClass::Cntrl => (0u8..=31)
-                .map(|c| c as char)
-                .chain(std::iter::once(127 as char))
-                .collect(),
-            PosixClass::Digit => ('0'..='9').collect(),
-            PosixClass::Graph => ('!'..='~').collect(),
-            PosixClass::Lower => ('a'..='z').collect(),
-            PosixClass::Print => (' '..='~').collect(),
-            PosixClass::Punct => "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~".chars().collect(),
-            PosixClass::Space => HashSet::from([' ', '\t', '\n', '\r', '\x0B', '\x0C']),
-            PosixClass::Upper => ('A'..='Z').collect(),
-            PosixClass::Xdigit => ('0'..='9').chain('a'..='f').chain('A'..='F').collect(),
+impl PosixClass {
+    pub(crate) fn for_each_char(&self, mut f: impl FnMut(char)) {
+        match self {
+            PosixClass::Alnum => {
+                for c in 'a'..='z' {
+                    f(c);
+                }
+                for c in 'A'..='Z' {
+                    f(c);
+                }
+                for c in '0'..='9' {
+                    f(c);
+                }
+            }
+            PosixClass::Alpha => {
+                for c in 'a'..='z' {
+                    f(c);
+                }
+                for c in 'A'..='Z' {
+                    f(c);
+                }
+            }
+            PosixClass::Blank => {
+                for c in POSIX_BLANK_CHARS {
+                    f(c);
+                }
+            }
+            PosixClass::Cntrl => {
+                for c in 0u8..=31 {
+                    f(c as char);
+                }
+                f(127 as char);
+            }
+            PosixClass::Digit => {
+                for c in '0'..='9' {
+                    f(c);
+                }
+            }
+            PosixClass::Graph => {
+                for c in '!'..='~' {
+                    f(c);
+                }
+            }
+            PosixClass::Lower => {
+                for c in 'a'..='z' {
+                    f(c);
+                }
+            }
+            PosixClass::Print => {
+                for c in ' '..='~' {
+                    f(c);
+                }
+            }
+            PosixClass::Punct => {
+                for c in POSIX_PUNCT_CHARS.chars() {
+                    f(c);
+                }
+            }
+            PosixClass::Space => {
+                for c in POSIX_SPACE_CHARS {
+                    f(c);
+                }
+            }
+            PosixClass::Upper => {
+                for c in 'A'..='Z' {
+                    f(c);
+                }
+            }
+            PosixClass::Xdigit => {
+                for c in '0'..='9' {
+                    f(c);
+                }
+                for c in 'a'..='f' {
+                    f(c);
+                }
+                for c in 'A'..='F' {
+                    f(c);
+                }
+            }
         }
     }
 }
@@ -410,8 +473,7 @@ pub(crate) enum RegexAstNode {
     },
     BracketExpression {
         is_negated: bool,
-        #[cfg_attr(test, serde(serialize_with = "sort_set"))]
-        expr: HashSet<char>,
+        expr: Vec<BracketItem>,
     },
     Literal(char),
     ZeroOrOne(Box<RegexAstNode>),
@@ -945,6 +1007,78 @@ mod tests {
     #[cfg(test)]
     mod character_sets {
         use super::*;
+
+        mod structure {
+            use super::*;
+
+            #[test]
+            fn bracket_expression_keeps_literal_items() {
+                let ast = RegexAstNode::try_from(vec![
+                    LSquareBracket,
+                    Literal('a'),
+                    Literal('b'),
+                    RSquareBracket,
+                ])
+                .unwrap();
+
+                assert_eq!(
+                    ast,
+                    RegexAstNode::BracketExpression {
+                        is_negated: false,
+                        expr: vec![BracketItem::Literal('a'), BracketItem::Literal('b')],
+                    }
+                );
+            }
+
+            #[test]
+            fn bracket_expression_keeps_range_items() {
+                let ast = RegexAstNode::try_from(vec![
+                    LSquareBracket,
+                    Literal('a'),
+                    Dash,
+                    Literal('z'),
+                    RSquareBracket,
+                ])
+                .unwrap();
+
+                assert_eq!(
+                    ast,
+                    RegexAstNode::BracketExpression {
+                        is_negated: false,
+                        expr: vec![BracketItem::Range {
+                            start: 'a',
+                            end: 'z',
+                        }],
+                    }
+                );
+            }
+
+            #[test]
+            fn bracket_expression_keeps_posix_class_items() {
+                let ast = RegexAstNode::try_from(vec![
+                    LSquareBracket,
+                    LSquareBracket,
+                    Colon,
+                    Literal('d'),
+                    Literal('i'),
+                    Literal('g'),
+                    Literal('i'),
+                    Literal('t'),
+                    Colon,
+                    RSquareBracket,
+                    RSquareBracket,
+                ])
+                .unwrap();
+
+                assert_eq!(
+                    ast,
+                    RegexAstNode::BracketExpression {
+                        is_negated: false,
+                        expr: vec![BracketItem::PosixClass(PosixClass::Digit)],
+                    }
+                );
+            }
+        }
 
         mod valid_syntax {
             use super::*;

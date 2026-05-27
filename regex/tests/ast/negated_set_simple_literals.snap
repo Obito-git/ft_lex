@@ -7,6 +7,6 @@ expression: "(pattern_string, ast_result)"
     BracketExpression:
       is_negated: true
       expr:
-        - a
-        - b
-        - c
+        - Literal: a
+        - Literal: b
+        - Literal: c

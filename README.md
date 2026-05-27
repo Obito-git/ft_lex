@@ -1,5 +1,10 @@
 # ft_lex
 
+regex to ast:
+https://en.wikipedia.org/wiki/Recursive_descent_parser
+https://en.wikipedia.org/wiki/Abstract_syntax_tree
+ast to nfa: https://en.wikipedia.org/wiki/Thompson%27s_construction
+
 ## Crates
 
 Since it is forbidden by the project subject to use any external library, I should implement some basic features by myself:

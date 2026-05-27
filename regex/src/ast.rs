@@ -1,9 +1,9 @@
 #[cfg(test)]
 use serde::{Serialize, Serializer};
 
+use crate::TokenSequence;
 use crate::nfa::{AnchorType, Nfa};
 use crate::token::Token;
-use crate::TokenSequence;
 use std::collections::HashSet;
 
 struct AstParser {
@@ -430,7 +430,7 @@ impl RegexAstNode {
     // TODO: err == string?
     pub(crate) fn new(pattern: &str) -> Result<Self, String> {
         let sequence = TokenSequence::try_from(pattern).unwrap(); //TODO: map err
-                                                                  //TODO: display?
+        //TODO: display?
         AstParser::parse(sequence).map_err(|e| format!("{e:?}"))
     }
 

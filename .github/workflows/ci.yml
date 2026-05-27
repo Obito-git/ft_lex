@@ -10,33 +10,21 @@ permissions:
   contents: read
 
 jobs:
-  zig:
+  rust:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Zig
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.16.0
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Zig artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/zig
-            .zig-cache
-          key: ${{ runner.os }}-zig-0.16.0-${{ hashFiles('build.zig', 'build.zig.zon', 'src/**/*.zig') }}
-          restore-keys: |
-            ${{ runner.os }}-zig-0.16.0-
+      - name: Cache Rust dependencies and build artifacts
+        uses: Swatinem/rust-cache@v2
 
       - name: Check formatting
-        run: zig fmt --check .
-
-      - name: Build
-        run: zig build
+        run: cargo fmt --all -- --check
 
       - name: Test
-        run: zig build test --summary all
+        run: cargo test --workspace

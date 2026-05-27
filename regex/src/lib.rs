@@ -2,7 +2,7 @@ use crate::token::tokenize;
 use ast::RegexAstNode;
 use nfa::Nfa;
 #[cfg(test)]
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 
 mod ast;
 mod nfa;
@@ -27,7 +27,6 @@ pub enum RegexErr {
     UnknownPosixClassName(usize, String),
 
     ExpectedEndOfPosixClassSyntax(usize, Option<char>),
-    InternalError, // TODO: delete, now I put it as stub when not sure
 
     EscapedNothing,
 }

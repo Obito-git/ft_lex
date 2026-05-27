@@ -26,18 +26,11 @@ pub(crate) enum Token {
 }
 
 impl Token {
-    pub(crate) fn is_quantifier(&self) -> bool {
-        matches!(
-            self,
-            Token::Star | Token::Plus | Token::QuestionMark | Token::LCurlyBracket
-        )
-    }
-
     pub(crate) fn is_literal(&self) -> bool {
         matches!(self, Token::Literal(_))
     }
 
-    pub(crate) fn is_atom_start(&self) -> bool {
+    pub(crate) fn can_start_concatenation(&self) -> bool {
         matches!(
             self,
             Token::Literal(_)

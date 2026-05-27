@@ -10,6 +10,26 @@ struct AstParser {
     pos: usize,
 }
 
+#[derive(Copy, Clone)]
+enum QuantifierKind {
+    ZeroOrMore,
+    OneOrMore,
+    ZeroOrOne,
+    Bounded,
+}
+
+impl QuantifierKind {
+    fn from_token(token: Token) -> Option<Self> {
+        match token {
+            Token::Star => Some(Self::ZeroOrMore),
+            Token::Plus => Some(Self::OneOrMore),
+            Token::QuestionMark => Some(Self::ZeroOrOne),
+            Token::LCurlyBracket => Some(Self::Bounded),
+            _ => None,
+        }
+    }
+}
+
 impl AstParser {
     pub fn parse(tokens: Vec<Token>) -> Result<RegexAstNode, RegexErr> {
         if tokens.is_empty() {
@@ -74,7 +94,7 @@ impl AstParser {
     fn parse_concatenation(&mut self) -> Result<RegexAstNode, RegexErr> {
         let mut left_node = self.parse_quantifier()?;
 
-        while self.peek().is_some_and(Token::is_atom_start) {
+        while self.peek().is_some_and(Token::can_start_concatenation) {
             let right_node = self.parse_quantifier()?;
             left_node = RegexAstNode::Concat(Box::new(left_node), Box::new(right_node));
         }
@@ -82,12 +102,16 @@ impl AstParser {
         Ok(left_node)
     }
 
-    fn map_quantifier(&mut self, node: RegexAstNode) -> Result<RegexAstNode, RegexErr> {
-        match self.next() {
-            Some(Token::Star) => Ok(RegexAstNode::Star(Box::new(node))),
-            Some(Token::Plus) => Ok(RegexAstNode::OneOrMore(Box::new(node))),
-            Some(Token::QuestionMark) => Ok(RegexAstNode::ZeroOrOne(Box::new(node))),
-            Some(Token::LCurlyBracket) => {
+    fn apply_quantifier(
+        &mut self,
+        node: RegexAstNode,
+        quantifier: QuantifierKind,
+    ) -> Result<RegexAstNode, RegexErr> {
+        match quantifier {
+            QuantifierKind::ZeroOrMore => Ok(RegexAstNode::Star(Box::new(node))),
+            QuantifierKind::OneOrMore => Ok(RegexAstNode::OneOrMore(Box::new(node))),
+            QuantifierKind::ZeroOrOne => Ok(RegexAstNode::ZeroOrOne(Box::new(node))),
+            QuantifierKind::Bounded => {
                 let mut content = Vec::new();
                 while let Some(token) = self.peek() {
                     if !token.is_literal() {
@@ -113,7 +137,6 @@ impl AstParser {
                     upper_bound: m,
                 })
             }
-            _ => Err(RegexErr::InternalError), //TODO: fix
         }
     }
 
@@ -121,14 +144,15 @@ impl AstParser {
         let mut node = self.parse_literal_or_group()?;
 
         if let Some((idx, next_token)) = self.peek_enumerated() {
-            if next_token.is_quantifier() {
+            if let Some(quantifier) = QuantifierKind::from_token(*next_token) {
                 if !node.is_quantifiable() {
                     return Err(RegexErr::PrecedentTokenIsNotQuantifiable(
                         idx.checked_sub(1).unwrap_or(idx),
                         next_token.into(),
                     ));
                 }
-                node = self.map_quantifier(node)?;
+                self.next();
+                node = self.apply_quantifier(node, quantifier)?;
             }
         }
         Ok(node)
@@ -138,7 +162,7 @@ impl AstParser {
         let (idx, token) = self
             .next_enumerated()
             .ok_or(RegexErr::UnexpectedEndOfExpression)?;
-        if token.is_quantifier() {
+        if QuantifierKind::from_token(token).is_some() {
             Err(RegexErr::ExpressionCantStartWithQuantifier(
                 idx,
                 (&token).into(),

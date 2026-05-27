@@ -1,6 +1,6 @@
+use crate::token::tokenize;
 use ast::RegexAstNode;
 use nfa::Nfa;
-use token::TokenSequence;
 
 mod ast;
 mod nfa;
@@ -13,7 +13,9 @@ pub struct Regex {
 impl Regex {
     // TODO: err string? or?
     pub fn new(pattern: &str) -> Result<Self, String> {
-        let nfa = RegexAstNode::new(pattern)?.to_nfa();
+        let tokens = tokenize(pattern).map_err(|e| format!("{e:?}"))?;
+        let ast = RegexAstNode::new(tokens)?;
+        let nfa = ast.to_nfa();
 
         Ok(Self { nfa })
     }

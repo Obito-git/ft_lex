@@ -1,26 +1,26 @@
 #[cfg(test)]
 use serde::{Serialize, Serializer};
 
-use crate::TokenSequence;
 use crate::nfa::{AnchorType, Nfa};
-use crate::token::Token;
+use crate::token::{Token, tokenize};
 use std::collections::HashSet;
 
 struct AstParser {
-    seq: TokenSequence,
+    tokens: Vec<Token>,
+    pos: usize,
 }
 
 impl AstParser {
-    pub fn parse(seq: TokenSequence) -> Result<RegexAstNode, SyntaxError> {
-        if seq.peek().is_none() {
+    pub fn parse(tokens: Vec<Token>) -> Result<RegexAstNode, SyntaxError> {
+        if tokens.is_empty() {
             return Ok(RegexAstNode::Empty);
         }
 
-        let mut parser = Self { seq };
+        let mut parser = Self { tokens, pos: 0 };
 
         let parsed_ast = parser.parse_alternation()?;
 
-        if let Some((pos, token_left)) = parser.seq.next_enumerated() {
+        if let Some((pos, token_left)) = parser.next_enumerated() {
             Err(SyntaxError::UnexpectedTokenInTheEndOfExpr(
                 pos,
                 token_left.into(),
@@ -30,11 +30,39 @@ impl AstParser {
         }
     }
 
+    fn cur_pos(&self) -> usize {
+        self.pos
+    }
+
+    fn peek(&self) -> Option<&Token> {
+        self.tokens.get(self.pos)
+    }
+
+    fn peek_enumerated(&self) -> Option<(usize, &Token)> {
+        self.peek().map(|token| (self.pos, token))
+    }
+
+    fn peek_two(&self) -> (Option<&Token>, Option<&Token>) {
+        (self.tokens.get(self.pos), self.tokens.get(self.pos + 1))
+    }
+
+    fn next(&mut self) -> Option<Token> {
+        let token = self.tokens.get(self.pos).copied()?;
+        self.pos += 1;
+        Some(token)
+    }
+
+    fn next_enumerated(&mut self) -> Option<(usize, Token)> {
+        let pos = self.pos;
+        let token = self.next()?;
+        Some((pos, token))
+    }
+
     fn parse_alternation(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let mut left_node = self.parse_concatenation()?;
 
-        while let Some(Token::Pipe) = self.seq.peek() {
-            self.seq.next();
+        while let Some(Token::Pipe) = self.peek() {
+            self.next();
 
             let right_node = self.parse_concatenation()?;
             left_node = RegexAstNode::Alter(Box::new(left_node), Box::new(right_node));
@@ -46,7 +74,7 @@ impl AstParser {
     fn parse_concatenation(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let mut left_node = self.parse_quantifier()?;
 
-        while self.seq.peek().map_or(false, |t| t.is_atom_start()) {
+        while self.peek().is_some_and(Token::is_atom_start) {
             let right_node = self.parse_quantifier()?;
             left_node = RegexAstNode::Concat(Box::new(left_node), Box::new(right_node));
         }
@@ -55,32 +83,32 @@ impl AstParser {
     }
 
     fn map_quantifier(&mut self, node: RegexAstNode) -> Result<RegexAstNode, SyntaxError> {
-        match self.seq.next() {
+        match self.next() {
             Some(Token::Star) => Ok(RegexAstNode::Star(Box::new(node))),
             Some(Token::Plus) => Ok(RegexAstNode::OneOrMore(Box::new(node))),
             Some(Token::QuestionMark) => Ok(RegexAstNode::ZeroOrOne(Box::new(node))),
             Some(Token::LCurlyBracket) => {
                 let mut content = Vec::new();
-                while let Some(token) = self.seq.peek() {
+                while let Some(token) = self.peek() {
                     if !token.is_literal() {
                         break;
                     }
-                    content.push(self.seq.next().unwrap().into());
+                    content.push(self.next().unwrap().into());
                 }
-                if self.seq.peek() != Some(&Token::RCurlyBracket) {
-                    return if let Some((idx, next)) = self.seq.next_enumerated() {
+                if self.peek() != Some(&Token::RCurlyBracket) {
+                    return if let Some((idx, next)) = self.next_enumerated() {
                         Err(SyntaxError::ExpectedClosingCurlyBracket(
                             idx,
                             Some(next.into()),
                         ))
                     } else {
                         Err(SyntaxError::ExpectedClosingCurlyBracket(
-                            self.seq.cur_pos(),
+                            self.cur_pos(),
                             None,
                         ))
                     };
                 }
-                self.seq.next();
+                self.next();
                 let (n, m) = Self::parse_bounded_quantifier(content)?;
                 Ok(RegexAstNode::Repeat {
                     node: Box::new(node),
@@ -95,7 +123,7 @@ impl AstParser {
     fn parse_quantifier(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let mut node = self.parse_literal_or_group()?;
 
-        if let Some((idx, next_token)) = self.seq.peek_enumerated() {
+        if let Some((idx, next_token)) = self.peek_enumerated() {
             if next_token.is_quantifier() {
                 if !node.is_quantifiable() {
                     return Err(SyntaxError::PrecedentTokenIsNotQuantifiable(
@@ -111,7 +139,6 @@ impl AstParser {
 
     fn parse_literal_or_group(&mut self) -> Result<RegexAstNode, SyntaxError> {
         let (idx, token) = self
-            .seq
             .next_enumerated()
             .ok_or(SyntaxError::UnexpectedEndOfExpression)?;
         if token.is_quantifier() {
@@ -130,19 +157,19 @@ impl AstParser {
             Token::LSquareBracket => self.parse_square_bracket_expr(),
             Token::RSquareBracket => Ok(RegexAstNode::Literal(']')),
             Token::LParen => {
-                if let Some(Token::RParen) = self.seq.peek() {
-                    self.seq.next();
+                if let Some(Token::RParen) = self.peek() {
+                    self.next();
                     return Ok(RegexAstNode::Empty);
                 }
                 let nested_expr = self.parse_alternation()?;
-                match self.seq.next() {
+                match self.next() {
                     Some(Token::RParen) => Ok(nested_expr),
                     Some(token) => Err(SyntaxError::ExpectedClosingParenthesis(
-                        self.seq.cur_pos(),
+                        self.cur_pos(),
                         Some(token.into()),
                     )),
                     None => Err(SyntaxError::ExpectedClosingParenthesis(
-                        self.seq.cur_pos(),
+                        self.cur_pos(),
                         None,
                     )),
                 }
@@ -153,19 +180,19 @@ impl AstParser {
 
     fn parse_posix_class(&mut self) -> Result<PosixClass, SyntaxError> {
         let mut class_name = String::new();
-        let class_name_start_pos = self.seq.cur_pos();
+        let class_name_start_pos = self.cur_pos();
 
-        while let Some(token) = self.seq.next() {
+        while let Some(token) = self.next() {
             if matches!(token, Token::Colon) {
                 break;
             }
             class_name.push(token.into());
         }
 
-        let next = self.seq.next();
+        let next = self.next();
         if next != Some(Token::RSquareBracket) {
             Err(SyntaxError::ExpectedEndOfPosixClassSyntax(
-                self.seq.cur_pos(),
+                self.cur_pos(),
                 next.map(char::from),
             ))?
         }
@@ -178,46 +205,44 @@ impl AstParser {
         let mut expr = HashSet::new();
         let mut is_negated = false;
 
-        if let Some(Token::Caret) = self.seq.peek() {
+        if let Some(Token::Caret) = self.peek() {
             is_negated = true;
-            self.seq.next();
+            self.next();
         }
 
         // in PCRE if ] is the first char it is treated as literal
-        if let Some(Token::RSquareBracket) = self.seq.peek() {
+        if let Some(Token::RSquareBracket) = self.peek() {
             expr.insert(']');
-            self.seq.next();
+            self.next();
         }
 
-        while let Some(token) = self.seq.peek() {
+        while let Some(token) = self.peek() {
             if *token == Token::RSquareBracket {
                 break;
             }
-            if let (Some(Token::LSquareBracket), Some(Token::Colon)) = self.seq.peek_two() {
-                self.seq.next();
-                self.seq.next();
+            if let (Some(Token::LSquareBracket), Some(Token::Colon)) = self.peek_two() {
+                self.next();
+                self.next();
                 let posix_class = self.parse_posix_class()?;
                 expr.extend(HashSet::<char>::from(&posix_class));
-                if let Some((idx, Token::Dash)) = self.seq.peek_enumerated() {
+                if let Some((idx, Token::Dash)) = self.peek_enumerated() {
                     Err(SyntaxError::RangeIsForbiddenForPosixClasses(idx))?
                 }
                 continue;
             }
 
-            let start_token = self.seq.next().unwrap();
+            let start_token = self.next().unwrap();
 
-            if let Some(Token::Dash) = self.seq.peek() {
-                self.seq.next();
+            if let Some(Token::Dash) = self.peek() {
+                self.next();
 
-                if let (Some(Token::LSquareBracket), Some(Token::Colon)) = self.seq.peek_two() {
-                    Err(SyntaxError::RangeIsForbiddenForPosixClasses(
-                        self.seq.cur_pos(),
-                    ))?
+                if let (Some(Token::LSquareBracket), Some(Token::Colon)) = self.peek_two() {
+                    Err(SyntaxError::RangeIsForbiddenForPosixClasses(self.cur_pos()))?
                 }
 
-                if let Some(end_token) = self.seq.peek().cloned() {
+                if let Some(end_token) = self.peek().copied() {
                     if end_token != Token::RSquareBracket {
-                        self.seq.next();
+                        self.next();
 
                         let start_char = char::from(&start_token);
                         let end_char = char::from(&end_token);
@@ -242,7 +267,7 @@ impl AstParser {
             }
         }
 
-        let next = self.seq.next();
+        let next = self.next();
         if next != Some(Token::RSquareBracket) {
             Err(SyntaxError::ExpectedClosingSquareBracket)?
         }
@@ -427,11 +452,8 @@ impl RegexAstNode {
         }
     }
 
-    // TODO: err == string?
-    pub(crate) fn new(pattern: &str) -> Result<Self, String> {
-        let sequence = TokenSequence::try_from(pattern).unwrap(); //TODO: map err
-        //TODO: display?
-        AstParser::parse(sequence).map_err(|e| format!("{e:?}"))
+    pub(crate) fn new(tokens: Vec<Token>) -> Result<Self, String> {
+        AstParser::parse(tokens).map_err(|e| format!("{e:?}"))
     }
 
     //TODO: check all quantifiable tokens
@@ -453,10 +475,7 @@ impl TryFrom<Vec<Token>> for RegexAstNode {
     type Error = SyntaxError;
 
     fn try_from(tokens: Vec<Token>) -> Result<Self, Self::Error> {
-        if tokens.is_empty() {
-            return Ok(RegexAstNode::Empty);
-        }
-        AstParser::parse(TokenSequence::new(tokens))
+        AstParser::parse(tokens)
     }
 }
 
@@ -503,6 +522,20 @@ mod tests {
 
     fn to_pattern_string(tokens: &Vec<Token>) -> String {
         tokens.iter().map(|token| token.to_string()).collect()
+    }
+
+    fn snapshot_pattern_string(name: &str, tokens: &Vec<Token>) -> String {
+        match name {
+            "escaped_colon_dash_and_caret" => r"\^\:a\:-\-".to_string(),
+            "escaped_special_chars_as_literals" => r"\^a\$".to_string(),
+            "escaped_hyphen_in_middle" => r"[a\-b]".to_string(),
+            "escaped_caret_at_start" => r"[\^ab]".to_string(),
+            "escaped_closing_bracket" => r"[a\]]".to_string(),
+            "escaped_opening_bracket" => r"[a\[]".to_string(),
+            "escaped_backslash" => r"[a\\b]".to_string(),
+            "unclosed_set_dangling_escape" => "[a\\\\".to_string(),
+            _ => to_pattern_string(tokens),
+        }
     }
 
     mod literals_and_concatenation {
@@ -560,12 +593,12 @@ mod tests {
         #[case("colon_with_quantifier", vec![Literal('a'), Colon, Literal('b'), Star])] // a:b*
         #[case("dash_with_alternation", vec![Literal('a'), Dash, Literal('b'), Pipe, Literal('c')])] // a-b|c
         #[case("colon_and_dash_in_group", vec![LParen, Literal('x'), Dash, Literal('y'), Colon, Literal('z'), RParen])] // (x-y:z)
-        #[case("escaped_colon_dash_and_caret", vec![BackSlash, Literal('^'), BackSlash, Colon, Literal('a'), BackSlash, Literal(':'), Dash, BackSlash, Literal('-')])] // \^a\:- \-
+        #[case("escaped_colon_dash_and_caret", vec![Literal('^'), Literal(':'), Literal('a'), Literal(':'), Dash, Literal('-')])] // \^\:a\:-
         fn bracket_special_chars_are_literals_outside_character_sets(
             #[case] name: &str,
             #[case] tokens: Vec<Token>,
         ) {
-            let pattern_string = to_pattern_string(&tokens);
+            let pattern_string = snapshot_pattern_string(name, &tokens);
             let ast_result = RegexAstNode::try_from(tokens);
             INSTA_SETTINGS
                 .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
@@ -574,9 +607,9 @@ mod tests {
         #[rstest]
         #[case("colon_as_literal_concat", vec![Literal('a'), Colon, Literal('b')])] // a:b
         #[case("dash_as_literal_concat", vec![Literal('a'), Dash, Literal('b')])] // a-b
-        #[case("escaped_special_chars_as_literals", vec![BackSlash, Literal('^'), Literal('a'), BackSlash, Literal('$')])] // \^a\$
+        #[case("escaped_special_chars_as_literals", vec![Literal('^'), Literal('a'), Literal('$')])] // \^a\$
         fn special_chars_are_literals(#[case] name: &str, #[case] tokens: Vec<Token>) {
-            let pattern_string = to_pattern_string(&tokens);
+            let pattern_string = snapshot_pattern_string(name, &tokens);
             let ast_result = RegexAstNode::try_from(tokens);
             INSTA_SETTINGS
                 .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));
@@ -990,11 +1023,11 @@ mod tests {
             #[case("metacharacters_as_literals", vec![LSquareBracket, Star, Plus, QuestionMark, Dot, LParen, RParen, LCurlyBracket, RCurlyBracket, Pipe, RSquareBracket])] // [*+?.(){}|]
 
             // --- Escaped Characters Inside a Set ---
-            #[case("escaped_hyphen_in_middle", vec![LSquareBracket, Literal('a'), BackSlash, Literal('-'), Literal('b'), RSquareBracket])] // [a\-b]
-            #[case("escaped_caret_at_start", vec![LSquareBracket, BackSlash, Literal('^'), Literal('a'), Literal('b'), RSquareBracket])] // [\^ab]
-            #[case("escaped_closing_bracket", vec![LSquareBracket, Literal('a'), BackSlash, Literal(']'), RSquareBracket])] // [a\]]
-            #[case("escaped_opening_bracket", vec![LSquareBracket, Literal('a'), BackSlash, LSquareBracket, RSquareBracket])] // [a\[]
-            #[case("escaped_backslash", vec![LSquareBracket, Literal('a'), BackSlash, Literal('\\'), Literal('b'), RSquareBracket])] // [a\\b]
+            #[case("escaped_hyphen_in_middle", vec![LSquareBracket, Literal('a'), Literal('-'), Literal('b'), RSquareBracket])] // [a\-b]
+            #[case("escaped_caret_at_start", vec![LSquareBracket, Literal('^'), Literal('a'), Literal('b'), RSquareBracket])] // [\^ab]
+            #[case("escaped_closing_bracket", vec![LSquareBracket, Literal('a'), Literal(']'), RSquareBracket])] // [a\]]
+            #[case("escaped_opening_bracket", vec![LSquareBracket, Literal('a'), Literal('['), RSquareBracket])] // [a\[]
+            #[case("escaped_backslash", vec![LSquareBracket, Literal('a'), Literal('\\'), Literal('b'), RSquareBracket])] // [a\\b]
 
             // --- Quantifiable Sets ---
             #[case("set_with_quantifier", vec![LSquareBracket, Literal('a'), Literal('b'), RSquareBracket, Plus])] // [ab]+
@@ -1002,7 +1035,7 @@ mod tests {
             #[case("range_with_bounded_quantifier", vec![LSquareBracket, Literal('0'), Dash, Literal('9'), RSquareBracket, LCurlyBracket, Literal('2'), Literal(','), Literal('4'), RCurlyBracket])] // [0-9]{2,4}
             #[case("range_in_parent_with_alter_and_start", vec![LParen, LSquareBracket, Literal('Z'), Dash, Literal('a'), RSquareBracket, Pipe, Literal('2'), RParen, Star])] // ([Z-a]|2)*
             fn test_valid_sets(#[case] name: &str, #[case] tokens: Vec<Token>) {
-                let pattern_string = to_pattern_string(&tokens);
+                let pattern_string = snapshot_pattern_string(name, &tokens);
                 let ast_result = RegexAstNode::try_from(tokens);
 
                 INSTA_SETTINGS
@@ -1019,12 +1052,12 @@ mod tests {
             #[case("empty_negated_set", vec![LSquareBracket, Caret, RSquareBracket])] // [^]
             #[case("unclosed_negated_set", vec![LSquareBracket, Literal('^'), Literal('a')])] // [^a
             #[case("unclosed_set_with_range", vec![LSquareBracket, Literal('a'), Dash])] // [a-
-            #[case("unclosed_set_dangling_escape", vec![LSquareBracket, Literal('a'), BackSlash, Literal('\\')])] // [a\
+            #[case("unclosed_set_dangling_escape", vec![LSquareBracket, Literal('a'), Literal('\\')])] // [a\
             #[case("unclosed_bracket_in_parent", vec![LParen, LSquareBracket, Literal('Z'), Dash, Literal('a')])] // ([Z-a
             #[case("unclosed_bracket_in_parent_2", vec![LParen, LSquareBracket, Literal('Z'), Dash, Literal('a'), RSquareBracket,
                 Pipe, LSquareBracket, Literal('Z'), Dash, Literal('a')])] // ([Z-a]|[Z-a
             fn unclosed_sets_fail(#[case] name: &str, #[case] tokens: Vec<Token>) {
-                let pattern_string = to_pattern_string(&tokens);
+                let pattern_string = snapshot_pattern_string(name, &tokens);
                 let ast_result = RegexAstNode::try_from(tokens);
                 INSTA_SETTINGS
                     .bind(|| insta::assert_yaml_snapshot!(name, (pattern_string, ast_result)));

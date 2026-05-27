@@ -1,8 +1,8 @@
 #[cfg(test)]
 use serde::{Serialize, Serializer};
 
-use crate::nfa::{AnchorType, Nfa};
-use crate::token::{Token, tokenize};
+use crate::RegexErr;
+use crate::token::Token;
 use std::collections::HashSet;
 
 struct AstParser {
@@ -11,7 +11,7 @@ struct AstParser {
 }
 
 impl AstParser {
-    pub fn parse(tokens: Vec<Token>) -> Result<RegexAstNode, SyntaxError> {
+    pub fn parse(tokens: Vec<Token>) -> Result<RegexAstNode, RegexErr> {
         if tokens.is_empty() {
             return Ok(RegexAstNode::Empty);
         }
@@ -21,7 +21,7 @@ impl AstParser {
         let parsed_ast = parser.parse_alternation()?;
 
         if let Some((pos, token_left)) = parser.next_enumerated() {
-            Err(SyntaxError::UnexpectedTokenInTheEndOfExpr(
+            Err(RegexErr::UnexpectedTokenInTheEndOfExpr(
                 pos,
                 token_left.into(),
             ))
@@ -58,7 +58,7 @@ impl AstParser {
         Some((pos, token))
     }
 
-    fn parse_alternation(&mut self) -> Result<RegexAstNode, SyntaxError> {
+    fn parse_alternation(&mut self) -> Result<RegexAstNode, RegexErr> {
         let mut left_node = self.parse_concatenation()?;
 
         while let Some(Token::Pipe) = self.peek() {
@@ -71,7 +71,7 @@ impl AstParser {
         Ok(left_node)
     }
 
-    fn parse_concatenation(&mut self) -> Result<RegexAstNode, SyntaxError> {
+    fn parse_concatenation(&mut self) -> Result<RegexAstNode, RegexErr> {
         let mut left_node = self.parse_quantifier()?;
 
         while self.peek().is_some_and(Token::is_atom_start) {
@@ -82,7 +82,7 @@ impl AstParser {
         Ok(left_node)
     }
 
-    fn map_quantifier(&mut self, node: RegexAstNode) -> Result<RegexAstNode, SyntaxError> {
+    fn map_quantifier(&mut self, node: RegexAstNode) -> Result<RegexAstNode, RegexErr> {
         match self.next() {
             Some(Token::Star) => Ok(RegexAstNode::Star(Box::new(node))),
             Some(Token::Plus) => Ok(RegexAstNode::OneOrMore(Box::new(node))),
@@ -97,15 +97,12 @@ impl AstParser {
                 }
                 if self.peek() != Some(&Token::RCurlyBracket) {
                     return if let Some((idx, next)) = self.next_enumerated() {
-                        Err(SyntaxError::ExpectedClosingCurlyBracket(
+                        Err(RegexErr::ExpectedClosingCurlyBracket(
                             idx,
                             Some(next.into()),
                         ))
                     } else {
-                        Err(SyntaxError::ExpectedClosingCurlyBracket(
-                            self.cur_pos(),
-                            None,
-                        ))
+                        Err(RegexErr::ExpectedClosingCurlyBracket(self.cur_pos(), None))
                     };
                 }
                 self.next();
@@ -116,17 +113,17 @@ impl AstParser {
                     upper_bound: m,
                 })
             }
-            _ => Err(SyntaxError::InternalError), //TODO: fix
+            _ => Err(RegexErr::InternalError), //TODO: fix
         }
     }
 
-    fn parse_quantifier(&mut self) -> Result<RegexAstNode, SyntaxError> {
+    fn parse_quantifier(&mut self) -> Result<RegexAstNode, RegexErr> {
         let mut node = self.parse_literal_or_group()?;
 
         if let Some((idx, next_token)) = self.peek_enumerated() {
             if next_token.is_quantifier() {
                 if !node.is_quantifiable() {
-                    return Err(SyntaxError::PrecedentTokenIsNotQuantifiable(
+                    return Err(RegexErr::PrecedentTokenIsNotQuantifiable(
                         idx.checked_sub(1).unwrap_or(idx),
                         next_token.into(),
                     ));
@@ -137,12 +134,12 @@ impl AstParser {
         Ok(node)
     }
 
-    fn parse_literal_or_group(&mut self) -> Result<RegexAstNode, SyntaxError> {
+    fn parse_literal_or_group(&mut self) -> Result<RegexAstNode, RegexErr> {
         let (idx, token) = self
             .next_enumerated()
-            .ok_or(SyntaxError::UnexpectedEndOfExpression)?;
+            .ok_or(RegexErr::UnexpectedEndOfExpression)?;
         if token.is_quantifier() {
-            Err(SyntaxError::ExpressionCantStartWithQuantifier(
+            Err(RegexErr::ExpressionCantStartWithQuantifier(
                 idx,
                 (&token).into(),
             ))?
@@ -164,21 +161,18 @@ impl AstParser {
                 let nested_expr = self.parse_alternation()?;
                 match self.next() {
                     Some(Token::RParen) => Ok(nested_expr),
-                    Some(token) => Err(SyntaxError::ExpectedClosingParenthesis(
+                    Some(token) => Err(RegexErr::ExpectedClosingParenthesis(
                         self.cur_pos(),
                         Some(token.into()),
                     )),
-                    None => Err(SyntaxError::ExpectedClosingParenthesis(
-                        self.cur_pos(),
-                        None,
-                    )),
+                    None => Err(RegexErr::ExpectedClosingParenthesis(self.cur_pos(), None)),
                 }
             }
-            _ => Err(SyntaxError::UnexpectedToken(idx, token.into())),
+            _ => Err(RegexErr::UnexpectedToken(idx, token.into())),
         }
     }
 
-    fn parse_posix_class(&mut self) -> Result<PosixClass, SyntaxError> {
+    fn parse_posix_class(&mut self) -> Result<PosixClass, RegexErr> {
         let mut class_name = String::new();
         let class_name_start_pos = self.cur_pos();
 
@@ -191,17 +185,17 @@ impl AstParser {
 
         let next = self.next();
         if next != Some(Token::RSquareBracket) {
-            Err(SyntaxError::ExpectedEndOfPosixClassSyntax(
+            Err(RegexErr::ExpectedEndOfPosixClassSyntax(
                 self.cur_pos(),
                 next.map(char::from),
             ))?
         }
 
         PosixClass::try_from(class_name.as_str())
-            .map_err(|_| SyntaxError::UnknownPosixClassName(class_name_start_pos, class_name))
+            .map_err(|_| RegexErr::UnknownPosixClassName(class_name_start_pos, class_name))
     }
 
-    fn parse_square_bracket_expr(&mut self) -> Result<RegexAstNode, SyntaxError> {
+    fn parse_square_bracket_expr(&mut self) -> Result<RegexAstNode, RegexErr> {
         let mut expr = HashSet::new();
         let mut is_negated = false;
 
@@ -226,7 +220,7 @@ impl AstParser {
                 let posix_class = self.parse_posix_class()?;
                 expr.extend(HashSet::<char>::from(&posix_class));
                 if let Some((idx, Token::Dash)) = self.peek_enumerated() {
-                    Err(SyntaxError::RangeIsForbiddenForPosixClasses(idx))?
+                    Err(RegexErr::RangeIsForbiddenForPosixClasses(idx))?
                 }
                 continue;
             }
@@ -237,7 +231,7 @@ impl AstParser {
                 self.next();
 
                 if let (Some(Token::LSquareBracket), Some(Token::Colon)) = self.peek_two() {
-                    Err(SyntaxError::RangeIsForbiddenForPosixClasses(self.cur_pos()))?
+                    Err(RegexErr::RangeIsForbiddenForPosixClasses(self.cur_pos()))?
                 }
 
                 if let Some(end_token) = self.peek().copied() {
@@ -248,9 +242,7 @@ impl AstParser {
                         let end_char = char::from(&end_token);
 
                         if start_char > end_char {
-                            return Err(SyntaxError::InvalidRangeInCharacterSet(
-                                start_char, end_char,
-                            ));
+                            return Err(RegexErr::InvalidRangeInCharacterSet(start_char, end_char));
                         }
 
                         for c_val in start_char as u32..=end_char as u32 {
@@ -269,15 +261,15 @@ impl AstParser {
 
         let next = self.next();
         if next != Some(Token::RSquareBracket) {
-            Err(SyntaxError::ExpectedClosingSquareBracket)?
+            Err(RegexErr::ExpectedClosingSquareBracket)?
         }
 
         Ok(RegexAstNode::BracketExpression { is_negated, expr })
     }
 
-    fn parse_bounded_quantifier(content: Vec<char>) -> Result<(u16, Option<u16>), SyntaxError> {
+    fn parse_bounded_quantifier(content: Vec<char>) -> Result<(u16, Option<u16>), RegexErr> {
         if content.is_empty() {
-            return Err(SyntaxError::EmptyRangeQuantifier);
+            return Err(RegexErr::EmptyRangeQuantifier);
         }
 
         let content = content.into_iter().collect::<String>();
@@ -287,16 +279,16 @@ impl AstParser {
             let n = n_str
                 .trim()
                 .parse::<u16>()
-                .map_err(|_| SyntaxError::RangeQuantifierInvalidNumber(n_str.to_string()))?;
+                .map_err(|_| RegexErr::RangeQuantifierInvalidNumber(n_str.to_string()))?;
             if m_str.trim().is_empty() {
                 Ok((n, None))
             } else {
                 let m = m_str
                     .trim()
                     .parse::<u16>()
-                    .map_err(|_| SyntaxError::RangeQuantifierInvalidNumber(m_str.to_string()))?;
+                    .map_err(|_| RegexErr::RangeQuantifierInvalidNumber(m_str.to_string()))?;
                 if n > m {
-                    Err(SyntaxError::RangeQuantifierMinGreaterMax(n, m))?
+                    Err(RegexErr::RangeQuantifierMinGreaterMax(n, m))?
                 }
                 Ok((n, Some(m)))
             }
@@ -304,7 +296,7 @@ impl AstParser {
             let n = content
                 .trim()
                 .parse::<u16>()
-                .map_err(|_| SyntaxError::RangeQuantifierInvalidNumber(content.to_string()))?;
+                .map_err(|_| RegexErr::RangeQuantifierInvalidNumber(content.to_string()))?;
             Ok((n, Some(n)))
         }
     }
@@ -413,8 +405,8 @@ impl RegexAstNode {
     // TODO: decide if I want to use self of &self. Probably I can drop reference cause the ast is
     // not used after building the nfa?
 
-    pub(crate) fn new(tokens: Vec<Token>) -> Result<Self, String> {
-        AstParser::parse(tokens).map_err(|e| format!("{e:?}"))
+    pub(crate) fn new(tokens: Vec<Token>) -> Result<Self, RegexErr> {
+        AstParser::parse(tokens)
     }
 
     //TODO: check all quantifiable tokens
@@ -433,33 +425,11 @@ impl RegexAstNode {
 }
 
 impl TryFrom<Vec<Token>> for RegexAstNode {
-    type Error = SyntaxError;
+    type Error = RegexErr;
 
     fn try_from(tokens: Vec<Token>) -> Result<Self, Self::Error> {
         AstParser::parse(tokens)
     }
-}
-
-#[derive(Clone, PartialEq, Debug)]
-#[cfg_attr(test, derive(Serialize))]
-pub(crate) enum SyntaxError {
-    UnexpectedToken(usize, char),
-    UnexpectedTokenInTheEndOfExpr(usize, char),
-    ExpectedClosingParenthesis(usize, Option<char>),
-    ExpectedClosingCurlyBracket(usize, Option<char>),
-    PrecedentTokenIsNotQuantifiable(usize, char),
-    ExpressionCantStartWithQuantifier(usize, char),
-    ExpectedClosingSquareBracket,
-    UnexpectedEndOfExpression,
-    EmptyRangeQuantifier,
-    RangeQuantifierInvalidNumber(String),
-    RangeQuantifierMinGreaterMax(u16, u16),
-    InvalidRangeInCharacterSet(char, char),
-    RangeIsForbiddenForPosixClasses(usize),
-    UnknownPosixClassName(usize, String),
-
-    ExpectedEndOfPosixClassSyntax(usize, Option<char>),
-    InternalError, // TODO: delete, now I put it as stub when not sure
 }
 
 #[cfg(test)]

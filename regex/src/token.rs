@@ -1,12 +1,8 @@
 #[cfg(test)]
 use serde::Serialize;
 
+use crate::RegexErr;
 use std::fmt::{Display, Formatter};
-
-#[derive(Debug, PartialEq)]
-pub(crate) enum TokenParsingErr {
-    EscapedNothing,
-}
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[cfg_attr(test, derive(Serialize))]
@@ -115,13 +111,13 @@ impl From<char> for Token {
     }
 }
 
-pub(crate) fn tokenize(pattern: &str) -> Result<Vec<Token>, TokenParsingErr> {
+pub(crate) fn tokenize(pattern: &str) -> Result<Vec<Token>, RegexErr> {
     let mut tokens = Vec::with_capacity(pattern.len());
     let mut pattern_iter = pattern.chars();
 
     while let Some(cur) = pattern_iter.next() {
         if cur == '\\' {
-            let escaped = pattern_iter.next().ok_or(TokenParsingErr::EscapedNothing)?;
+            let escaped = pattern_iter.next().ok_or(RegexErr::EscapedNothing)?;
             tokens.push(Token::Literal(escaped));
         } else {
             tokens.push(Token::from(cur));
@@ -225,7 +221,7 @@ mod tests {
         let res = tokenize(pattern);
 
         assert!(res.is_err());
-        assert_eq!(res.unwrap_err(), TokenParsingErr::EscapedNothing);
+        assert_eq!(res.unwrap_err(), RegexErr::EscapedNothing);
     }
 
     #[test]

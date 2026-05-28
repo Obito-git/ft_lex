@@ -4,4 +4,5 @@ expression: "(pattern_string, ast_result)"
 ---
 - "[a-[:digit:]]"
 - Err:
-    RangeIsForbiddenForPosixClasses: 3
+    RangeIsForbiddenForPosixClasses:
+      position: 3

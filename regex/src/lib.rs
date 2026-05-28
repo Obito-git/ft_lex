@@ -11,22 +11,49 @@ mod token;
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(test, derive(Serialize))]
 pub enum RegexErr {
-    UnexpectedToken(usize, char),
-    UnexpectedTokenInTheEndOfExpr(usize, char),
-    ExpectedClosingParenthesis(usize, Option<char>),
-    ExpectedClosingCurlyBracket(usize, Option<char>),
-    PrecedentTokenIsNotQuantifiable(usize, char),
-    ExpressionCantStartWithQuantifier(usize, char),
-    ExpectedClosingSquareBracket,
+    UnexpectedToken {
+        position: usize,
+        found: char,
+    },
+    ExpectedClosingParenthesis {
+        position: usize,
+        found: Option<char>,
+    },
+    ExpectedClosingCurlyBracket {
+        position: usize,
+        found: Option<char>,
+    },
+    ExpectedClosingSquareBracket {
+        position: usize,
+    },
     UnexpectedEndOfExpression,
+    QuantifierWithoutTarget {
+        position: usize,
+        quantifier: char,
+    },
     EmptyRangeQuantifier,
-    RangeQuantifierInvalidNumber(String),
-    RangeQuantifierMinGreaterMax(u16, u16),
-    InvalidRangeInCharacterSet(char, char),
-    RangeIsForbiddenForPosixClasses(usize),
-    UnknownPosixClassName(usize, String),
-
-    ExpectedEndOfPosixClassSyntax(usize, Option<char>),
+    RangeQuantifierInvalidNumber {
+        text: String,
+    },
+    RangeQuantifierMinExceedsMax {
+        min: u16,
+        max: u16,
+    },
+    InvalidRangeInCharacterSet {
+        start: char,
+        end: char,
+    },
+    RangeIsForbiddenForPosixClasses {
+        position: usize,
+    },
+    UnknownPosixClassName {
+        position: usize,
+        name: String,
+    },
+    ExpectedClosingPosixClass {
+        position: usize,
+        found: Option<char>,
+    },
 
     EscapedNothing,
 }

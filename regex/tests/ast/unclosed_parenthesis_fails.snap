@@ -5,5 +5,5 @@ expression: "(pattern_string, ast_result)"
 - a(b
 - Err:
     ExpectedClosingParenthesis:
-      - 3
-      - ~
+      position: 3
+      found: ~

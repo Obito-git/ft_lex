@@ -433,10 +433,6 @@ impl Nfa {
 
         final_states.contains(&self.accept_state)
     }
-
-    pub(crate) fn find(&self, s: &str) -> Option<()> {
-        unimplemented!()
-    }
 }
 
 impl From<RegexAstNode> for Nfa {
@@ -465,8 +461,18 @@ impl From<RegexAstNode> for Nfa {
                 nfa_child
             }
             RegexAstNode::Empty => Nfa::from_epsilon(),
-            RegexAstNode::ZeroOrOne(_) => todo!(),
-            RegexAstNode::OneOrMore(_) => todo!(),
+            RegexAstNode::ZeroOrOne(regex_ast_node) => {
+                let mut nfa_child = Self::from(*regex_ast_node);
+
+                nfa_child.zero_or_one();
+                nfa_child
+            }
+            RegexAstNode::OneOrMore(regex_ast_node) => {
+                let mut nfa_child = Self::from(*regex_ast_node);
+
+                nfa_child.one_or_more();
+                nfa_child
+            }
             RegexAstNode::Repeat {
                 node,
                 lower_bound,

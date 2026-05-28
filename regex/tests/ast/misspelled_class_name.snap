@@ -5,5 +5,5 @@ expression: "(pattern_string, ast_result)"
 - "[[:digis:]]"
 - Err:
     UnknownPosixClassName:
-      - 3
-      - digis
+      position: 3
+      name: digis

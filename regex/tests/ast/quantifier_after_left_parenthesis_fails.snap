@@ -4,6 +4,6 @@ expression: "(pattern_string, ast_result)"
 ---
 - (*1)
 - Err:
-    ExpressionCantStartWithQuantifier:
-      - 1
-      - "*"
+    QuantifierWithoutTarget:
+      position: 1
+      quantifier: "*"

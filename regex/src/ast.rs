@@ -48,10 +48,10 @@ impl AstParser {
         let parsed_ast = parser.parse_alternation()?;
 
         if let Some((pos, token_left)) = parser.next_enumerated() {
-            Err(RegexErr::UnexpectedTokenInTheEndOfExpr(
-                pos,
-                token_left.into(),
-            ))
+            Err(RegexErr::UnexpectedToken {
+                position: pos,
+                found: token_left.into(),
+            })
         } else {
             Ok(parsed_ast)
         }
@@ -128,12 +128,15 @@ impl AstParser {
                 }
                 if self.peek() != Some(&Token::RCurlyBracket) {
                     return if let Some((idx, next)) = self.next_enumerated() {
-                        Err(RegexErr::ExpectedClosingCurlyBracket(
-                            idx,
-                            Some(next.into()),
-                        ))
+                        Err(RegexErr::ExpectedClosingCurlyBracket {
+                            position: idx,
+                            found: Some(next.into()),
+                        })
                     } else {
-                        Err(RegexErr::ExpectedClosingCurlyBracket(self.cur_pos(), None))
+                        Err(RegexErr::ExpectedClosingCurlyBracket {
+                            position: self.cur_pos(),
+                            found: None,
+                        })
                     };
                 }
                 self.next();
@@ -153,10 +156,10 @@ impl AstParser {
         if let Some((idx, next_token)) = self.peek_enumerated() {
             if let Some(quantifier) = QuantifierKind::from_token(*next_token) {
                 if !node.is_quantifiable() {
-                    return Err(RegexErr::PrecedentTokenIsNotQuantifiable(
-                        idx.checked_sub(1).unwrap_or(idx),
-                        next_token.into(),
-                    ));
+                    return Err(RegexErr::QuantifierWithoutTarget {
+                        position: idx.checked_sub(1).unwrap_or(idx),
+                        quantifier: next_token.into(),
+                    });
                 }
                 self.next();
                 node = self.apply_quantifier(node, quantifier)?;
@@ -170,10 +173,10 @@ impl AstParser {
             .next_enumerated()
             .ok_or(RegexErr::UnexpectedEndOfExpression)?;
         if QuantifierKind::from_token(token).is_some() {
-            Err(RegexErr::ExpressionCantStartWithQuantifier(
-                idx,
-                (&token).into(),
-            ))?
+            Err(RegexErr::QuantifierWithoutTarget {
+                position: idx,
+                quantifier: (&token).into(),
+            })?
         }
         match token {
             Token::Literal(c) => Ok(RegexAstNode::Literal(c)),
@@ -192,14 +195,20 @@ impl AstParser {
                 let nested_expr = self.parse_alternation()?;
                 match self.next() {
                     Some(Token::RParen) => Ok(nested_expr),
-                    Some(token) => Err(RegexErr::ExpectedClosingParenthesis(
-                        self.cur_pos(),
-                        Some(token.into()),
-                    )),
-                    None => Err(RegexErr::ExpectedClosingParenthesis(self.cur_pos(), None)),
+                    Some(token) => Err(RegexErr::ExpectedClosingParenthesis {
+                        position: self.cur_pos(),
+                        found: Some(token.into()),
+                    }),
+                    None => Err(RegexErr::ExpectedClosingParenthesis {
+                        position: self.cur_pos(),
+                        found: None,
+                    }),
                 }
             }
-            _ => Err(RegexErr::UnexpectedToken(idx, token.into())),
+            _ => Err(RegexErr::UnexpectedToken {
+                position: idx,
+                found: token.into(),
+            }),
         }
     }
 
@@ -216,14 +225,16 @@ impl AstParser {
 
         let next = self.next();
         if next != Some(Token::RSquareBracket) {
-            Err(RegexErr::ExpectedEndOfPosixClassSyntax(
-                self.cur_pos(),
-                next.map(char::from),
-            ))?
+            Err(RegexErr::ExpectedClosingPosixClass {
+                position: self.cur_pos(),
+                found: next.map(char::from),
+            })?
         }
 
-        PosixClass::try_from(class_name.as_str())
-            .map_err(|_| RegexErr::UnknownPosixClassName(class_name_start_pos, class_name))
+        PosixClass::try_from(class_name.as_str()).map_err(|_| RegexErr::UnknownPosixClassName {
+            position: class_name_start_pos,
+            name: class_name,
+        })
     }
 
     fn parse_square_bracket_expr(&mut self) -> Result<RegexAstNode, RegexErr> {
@@ -251,7 +262,7 @@ impl AstParser {
                 let posix_class = self.parse_posix_class()?;
                 items.push(BracketItem::PosixClass(posix_class));
                 if let Some((idx, Token::Dash)) = self.peek_enumerated() {
-                    Err(RegexErr::RangeIsForbiddenForPosixClasses(idx))?
+                    Err(RegexErr::RangeIsForbiddenForPosixClasses { position: idx })?
                 }
                 continue;
             }
@@ -262,7 +273,9 @@ impl AstParser {
                 self.next();
 
                 if let (Some(Token::LSquareBracket), Some(Token::Colon)) = self.peek_two() {
-                    Err(RegexErr::RangeIsForbiddenForPosixClasses(self.cur_pos()))?
+                    Err(RegexErr::RangeIsForbiddenForPosixClasses {
+                        position: self.cur_pos(),
+                    })?
                 }
 
                 if let Some(end_token) = self.peek().copied() {
@@ -273,7 +286,10 @@ impl AstParser {
                         let end_char = char::from(&end_token);
 
                         if start_char > end_char {
-                            return Err(RegexErr::InvalidRangeInCharacterSet(start_char, end_char));
+                            return Err(RegexErr::InvalidRangeInCharacterSet {
+                                start: start_char,
+                                end: end_char,
+                            });
                         }
 
                         items.push(BracketItem::Range {
@@ -293,7 +309,9 @@ impl AstParser {
 
         let next = self.next();
         if next != Some(Token::RSquareBracket) {
-            Err(RegexErr::ExpectedClosingSquareBracket)?
+            Err(RegexErr::ExpectedClosingSquareBracket {
+                position: self.cur_pos(),
+            })?
         }
 
         Ok(RegexAstNode::BracketExpression {
@@ -311,27 +329,30 @@ impl AstParser {
 
         //TODO: test trim before and after
         if let Some((n_str, m_str)) = content.split_once(',') {
-            let n = n_str
-                .trim()
-                .parse::<u16>()
-                .map_err(|_| RegexErr::RangeQuantifierInvalidNumber(n_str.to_string()))?;
+            let n = n_str.trim().parse::<u16>().map_err(|_| {
+                RegexErr::RangeQuantifierInvalidNumber {
+                    text: n_str.to_string(),
+                }
+            })?;
             if m_str.trim().is_empty() {
                 Ok((n, None))
             } else {
-                let m = m_str
-                    .trim()
-                    .parse::<u16>()
-                    .map_err(|_| RegexErr::RangeQuantifierInvalidNumber(m_str.to_string()))?;
+                let m = m_str.trim().parse::<u16>().map_err(|_| {
+                    RegexErr::RangeQuantifierInvalidNumber {
+                        text: m_str.to_string(),
+                    }
+                })?;
                 if n > m {
-                    Err(RegexErr::RangeQuantifierMinGreaterMax(n, m))?
+                    Err(RegexErr::RangeQuantifierMinExceedsMax { min: n, max: m })?
                 }
                 Ok((n, Some(m)))
             }
         } else {
-            let n = content
-                .trim()
-                .parse::<u16>()
-                .map_err(|_| RegexErr::RangeQuantifierInvalidNumber(content.to_string()))?;
+            let n = content.trim().parse::<u16>().map_err(|_| {
+                RegexErr::RangeQuantifierInvalidNumber {
+                    text: content.to_string(),
+                }
+            })?;
             Ok((n, Some(n)))
         }
     }

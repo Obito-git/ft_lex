@@ -5,5 +5,5 @@ expression: "(pattern_string, ast_result)"
 - "[z-0]"
 - Err:
     InvalidRangeInCharacterSet:
-      - z
-      - "0"
+      start: z
+      end: "0"

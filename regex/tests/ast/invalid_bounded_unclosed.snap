@@ -5,5 +5,5 @@ expression: "(pattern_string, ast_result)"
 - "a{3"
 - Err:
     ExpectedClosingCurlyBracket:
-      - 3
-      - ~
+      position: 3
+      found: ~

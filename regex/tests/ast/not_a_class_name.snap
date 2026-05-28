@@ -5,5 +5,5 @@ expression: "(pattern_string, ast_result)"
 - "[[:foo:]]"
 - Err:
     UnknownPosixClassName:
-      - 3
-      - foo
+      position: 3
+      name: foo

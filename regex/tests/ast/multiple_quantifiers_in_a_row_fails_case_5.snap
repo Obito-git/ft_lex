@@ -4,6 +4,6 @@ expression: "(pattern_string, ast_result)"
 ---
 - "a{3}+"
 - Err:
-    UnexpectedTokenInTheEndOfExpr:
-      - 4
-      - +
+    UnexpectedToken:
+      position: 4
+      found: +

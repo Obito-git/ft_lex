@@ -4,6 +4,6 @@ expression: "(pattern_string, ast_result)"
 ---
 - "[[:digit]]"
 - Err:
-    ExpectedEndOfPosixClassSyntax:
-      - 10
-      - ~
+    ExpectedClosingPosixClass:
+      position: 10
+      found: ~

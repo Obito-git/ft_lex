@@ -4,6 +4,6 @@ expression: "(pattern_string, ast_result)"
 ---
 - "a{5,2}"
 - Err:
-    RangeQuantifierMinGreaterMax:
-      - 5
-      - 2
+    RangeQuantifierMinExceedsMax:
+      min: 5
+      max: 2

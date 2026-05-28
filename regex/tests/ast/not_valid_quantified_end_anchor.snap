@@ -4,6 +4,6 @@ expression: "(pattern_string, ast_result)"
 ---
 - a$+
 - Err:
-    PrecedentTokenIsNotQuantifiable:
-      - 1
-      - +
+    QuantifierWithoutTarget:
+      position: 1
+      quantifier: +

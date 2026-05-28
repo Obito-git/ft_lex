@@ -5,5 +5,5 @@ expression: "(pattern_string, ast_result)"
 - "|a"
 - Err:
     UnexpectedToken:
-      - 0
-      - "|"
+      position: 0
+      found: "|"
